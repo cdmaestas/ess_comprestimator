@@ -191,7 +191,7 @@ def get_partial_file(file_entry):
 
     return len(data_segment), data_buffer
 
-def directory_comprestimator(src_dir: Path, sampling_strategy=SamplingStrategy.AUTO, sampling_percentage=None, skip_nested_directories=False, excluded_patterns=[], skip_hidden=False, keep_temp=False, verbose=False) -> str:
+def directory_comprestimator(src_dir: Path, sampling_strategy=SamplingStrategy.AUTO, sampling_percentage=None, skip_nested_directories=False, excluded_patterns=[], skip_hidden=False, keep_temp=False, verbose=False) -> list[str]:
     """
     Given a directory path, randomly samples files and creates a tar archive from them, and then runs comprestimator on the archive
     """
@@ -250,6 +250,8 @@ def directory_comprestimator(src_dir: Path, sampling_strategy=SamplingStrategy.A
                 try:
                     if isinstance(file_entry, list):
                         size, data_buffer = get_partial_file(file_entry)
+                        out.write(struct.pack("<Q", size))
+                        shutil.copyfileobj(data_buffer, out, 1024*1024*64)
                     else:
                         size = os.path.getsize(file_entry)
                         out.write(struct.pack("<Q", size))
