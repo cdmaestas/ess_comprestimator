@@ -7,7 +7,10 @@ import random
 import tempfile
 import tarfile
 import csv
+import struct
 from fnmatch import fnmatch
+from pathlib import Path
+import shutil
 
 DEFAULT_SAMPLE_FILE_SIZE = 10_000_000_000 # If weighted sampling, sets max file size of sample archive
 DEFAULT_SAMPLING_PERCENTAGE = .1
@@ -17,14 +20,17 @@ COMPRESTIMATOR_RESULTS_PATH = "./results.csv"
 
 KNOWN_COMPRESSED_FILE_SUFFIXES = [".png", ".jpg", ".jpeg", ".gif", ".mp3", ".mp4", ".docx", ".xlsx", ".zip", ".rar", ".bz", ".gz"]
 
+TEMP_FILE_PREFIX = "comprestimator_tmp_"
+
 class SamplingStrategy(Enum):
     AUTO = 0
     EXHAUSTIVE = 1  # Doesn't sample, takes entire directory (most accurate, slow)
     WEIGHTED = 3    # Samples weighted on file size, (good accuracy and speed)
 
 class Sampler():
-    def __init__(self, max_file_size = DEFAULT_SAMPLE_FILE_SIZE):
+    def __init__(self, max_file_size = DEFAULT_SAMPLE_FILE_SIZE, verbose=False):
         self.max_file_size = max_file_size
+        self.verbose = verbose
 
     def sample(self, strategy: SamplingStrategy, file_size_list: list[tuple[str, int]], total_dir_size: int) -> list[str]:
         """
@@ -82,14 +88,16 @@ class Sampler():
                         size = fair_space_allocation
                     else:
                         sampling_list.append(file)
-                    print(f"Added {file} with size {size} ; current archive is {current_size+size} bytes")
+                    if self.verbose:
+                        print(f"Added {file} with size {size} ; current archive is {current_size+size} bytes")
                     current_size += size
                     entry_to_remove = entry
                     break
 
             # if a file was just added, make sure we don't resample it
             if entry_to_remove:
-                print(f"Removing {entry_to_remove[0]} from consideration for further sampling")
+                if self.verbose:
+                    print(f"Removing {entry_to_remove[0]} from consideration for further sampling")
                 file_size_list.remove(entry_to_remove)
 
             # no files left to sample, exit
@@ -134,7 +142,7 @@ def percent_type(value):
         raise argparse.ArgumentTypeError("Invalid percentage value")
 
 
-def file_comprestimator(input_path: str):
+def file_comprestimator(input_path: Path | str):
     comprestimator_exists = os.path.isfile(COMPRESTIMATOR_PATH)
     if not comprestimator_exists:
         raise FileNotFoundError(f"""Comprestimator executable not found  at {COMPRESTIMATOR_PATH}.  
@@ -181,12 +189,9 @@ def get_partial_file(file_entry):
     
     data_buffer = io.BytesIO(data_segment)
 
-    tarinfo = tarfile.TarInfo(name="comprestimator_partial_" + str(random.randint(0,10_000_000)))
-    tarinfo.size = len(data_segment)
+    return len(data_segment), data_buffer
 
-    return tarinfo, data_buffer
-
-def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AUTO, sampling_percentage=None, skip_nested_directories=False, excluded_patterns=[], skip_hidden=False) -> str:
+def directory_comprestimator(src_dir: Path, sampling_strategy=SamplingStrategy.AUTO, sampling_percentage=None, skip_nested_directories=False, excluded_patterns=[], skip_hidden=False, keep_temp=False, verbose=False) -> str:
     """
     Given a directory path, randomly samples files and creates a tar archive from them, and then runs comprestimator on the archive
     """
@@ -229,27 +234,27 @@ def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AU
     
     print(f"Sampling up to {sample_size} bytes from directory")
 
-    sampler = Sampler(max_file_size=sample_size)        
+    sampler = Sampler(max_file_size=sample_size, verbose=verbose)        
     files_sample = sampler.sample(sampling_strategy, files_with_sizes, total_size)
 
     print("Creating archive for comprestimator input...")
 
     current_dir = os.getcwd()
-    temp_file = tempfile.NamedTemporaryFile(delete=False, prefix="tmp_", dir=current_dir)
+    temp_file = tempfile.NamedTemporaryFile(delete=False, prefix=TEMP_FILE_PREFIX, dir=current_dir)
     files_added = 0
     try:
         print("Creating temporary file for archive at", temp_file.name, "...")
         # add sample files to archive
-        with tarfile.open(fileobj=temp_file, mode='w:') as tar:
+        with open(temp_file.name, mode='wb') as out:
             for file_entry in files_sample:
                 try:
                     if isinstance(file_entry, list):
-                        # partial file entry
-                        tarinfo, data_buffer = get_partial_file(file_entry)
-                        tar.addfile(tarinfo, fileobj=data_buffer)
-                        print(f"Added {tarinfo.size} byte portion of file {file_entry[0]} to archive as it was too large")
+                        size, data_buffer = get_partial_file(file_entry)
                     else:
-                        tar.add(file_entry)
+                        size = os.path.getsize(file_entry)
+                        out.write(struct.pack("<Q", size))
+                        with open(file_entry, "rb") as f:
+                            shutil.copyfileobj(f, out, 1024*1024*64)
                     files_added +=1
                 except PermissionError:
                     print(f"Could not access {file_entry} due to insufficient permissions. Skipping...")
@@ -263,8 +268,11 @@ def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AU
         print("Comprestimator finished!")
     finally: 
         # delete archive
-        print("Deleting temporary file...")
-        os.unlink(temp_file.name)
+        if keep_temp:
+            print(f"Keeping sampling file {temp_file.name} for future reuse")
+        else:
+            print("Deleting temporary file...")
+            os.unlink(temp_file.name)
 
     # count permission errors
     files_not_added = len(files_sample) - files_added
@@ -293,8 +301,11 @@ def main():
         default=[],
         help='File/Directory names to exclude (can be used multiple times to exclude multiple files)'
     )
+    parser.add_argument('--verbose', action="store_true", help="Will output detailed logging information")
+    parser.add_argument('--keep-temp-file', action="store_true", help="Won't delete the temp file created in the run.")
     parser.add_argument('--skip-nested-directories', action="store_true", help="Will not sample directories nested within target directory, only files")
     parser.add_argument('--skip-hidden', action="store_true", help="Will not sample hidden directories and files within the target directory")
+
     args = parser.parse_args()
     input_path = args.path
 
@@ -302,6 +313,8 @@ def main():
     sampling_strategy = SamplingStrategy.AUTO
     sampling_percentage = None
     skip_hidden = args.skip_hidden
+    verbose = args.verbose
+    keep_temp = args.keep_temp_file
 
     if args.skip_nested_directories:
         skip_nested_directories = True
@@ -314,15 +327,29 @@ def main():
     elif args.sampling_percentage is not None:
         sampling_percentage = args.sampling_percentage
 
+    # Check for existing sample files
+    current_dir = os.getcwd()
+    existing_sample = False
+    potential_samples = [p for p in Path(current_dir).glob(f'{TEMP_FILE_PREFIX}*') if p.is_file()]
+    if len(potential_samples) > 0:
+        print("Found the following existing samples: ")
+        for index, sample in enumerate(potential_samples):
+            print(f"{index+1}) {sample}")
+        use_sample = input("Enter sample number to use one of the existing samples, or leave blank to run from scratch: ")
+        if len(use_sample) != 0:
+            sample_index = int(use_sample) - 1
+            input_path = potential_samples[sample_index]
+            existing_sample=True
+
     # Run Comprestimator on file or directory
     path_is_a_directory = os.path.isdir(input_path)
     messages = []
-    if path_is_a_directory:
+    if path_is_a_directory and not existing_sample:
         # If input is a directory, convert it to a file and run comprestimator on that
         print(f"'{input_path}' is a directory, sampling to create an input file for comprestimator. This may take a while for deeply nested directories...")
         messages = directory_comprestimator(input_path, sampling_strategy, \
                                   sampling_percentage, skip_nested_directories, \
-                                    excluded_patterns, skip_hidden)
+                                    excluded_patterns, skip_hidden, keep_temp, verbose)
     else:
         # If input is a file, just run comprestimator on it directly
         print(f"'{input_path}' is a file, sampling directly with comprestimator...")
