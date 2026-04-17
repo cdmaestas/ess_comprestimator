@@ -1,161 +1,31 @@
+from queue import Queue
+from threading import Thread
 from enum import Enum
-import subprocess
 import argparse
-import io
 import os
 import random
-import tempfile
-import tarfile
-import csv
-import struct
+import time
+from typing import Generator
+import zlib
 from fnmatch import fnmatch
 from pathlib import Path
-import shutil
+from collections import Counter
 
-DEFAULT_SAMPLE_FILE_SIZE = 10_000_000_000 # If weighted sampling, sets max file size of sample archive
-DEFAULT_SAMPLING_PERCENTAGE = .1
 
-COMPRESTIMATOR_PATH = "./comprestimator"
-COMPRESTIMATOR_RESULTS_PATH = "./results.csv"
-
+FCM_BLOCKSIZE = 512
+LOG_INTERVAL = 100
+DEFAULT_SAMPLING_PERCENTAGE = 1
 KNOWN_COMPRESSED_FILE_SUFFIXES = [".png", ".jpg", ".jpeg", ".gif", ".mp3", ".mp4", ".docx", ".xlsx", ".zip", ".rar", ".bz", ".gz"]
 
-TEMP_FILE_PREFIX = "comprestimator_tmp_"
 
-class SamplingStrategy(Enum):
-    AUTO = 0
-    EXHAUSTIVE = 1  # Doesn't sample, takes entire directory (most accurate, slow)
-    WEIGHTED = 3    # Samples weighted on file size, (good accuracy and speed)
-
-class Sampler():
-    def __init__(self, max_file_size = DEFAULT_SAMPLE_FILE_SIZE, verbose=False):
-        self.max_file_size = max_file_size
-        self.verbose = verbose
-
-    def sample(self, strategy: SamplingStrategy, file_size_list: list[tuple[str, int]], total_dir_size: int) -> list[str]:
-        """
-        Given a sampling strategy and a list of (path, file_size) tuples, returns sampled list of file paths
-        """
-
-        # if weighted and directory is smaller than max output file size, it's equivalent to exhaustive
-        if strategy == SamplingStrategy.AUTO or strategy == SamplingStrategy.WEIGHTED:
-            if total_dir_size <= self.max_file_size: # dir is smaller than max, just do exhaustive
-                print("Directory is small, so switching to EXHAUSTIVE strategy")
-                strategy = SamplingStrategy.EXHAUSTIVE
-            else:
-                strategy = SamplingStrategy.WEIGHTED
-
-        print(f"Using {strategy.name} sampling strategy ")
-
-        if strategy == SamplingStrategy.EXHAUSTIVE: # returns initial list with sizes removed
-            return self.exhaustive_sample(file_size_list) 
-        else:
-            return self.weighted_sample(file_size_list, total_dir_size)
-            
-    def exhaustive_sample(self, file_size_list: list[tuple[str, int]]) -> list[str]:
-        paths, _ = zip(*file_size_list)
-        return list(paths)
-        
-    def weighted_sample(self, file_size_list: list[tuple[str, int]], total_dir_size) -> list[str]:
-        """
-        Weighted sample based on file sizes
-        """
-        current_size = 0
-        failed_attempts = 0
-        sampling_list: list[str] = []
-        sampling_ratio = self.max_file_size / total_dir_size
-
-        while current_size < self.max_file_size:
-            # choose random point in list of files
-            initial_list_size = len(sampling_list)
-            random_point = random.randrange(0,total_dir_size-current_size)
-            current_point = 0
-            entry_to_remove = None
-
-            # find corresponding file to that point
-            for entry in file_size_list:
-                file, size = entry
-                current_point += size
-                # found target file
-                if random_point < current_point:
-
-                    # if file is too big to add as-is, add a portion of it
-                    space_remaining = self.max_file_size - current_size
-                    fair_space_allocation = int(size * sampling_ratio)
-                    if size > space_remaining or (size > 0.1*self.max_file_size and size > fair_space_allocation):
-                        sampling_list.append([file, fair_space_allocation, size])
-                        total_dir_size -= (size - fair_space_allocation)
-                        size = fair_space_allocation
-                    else:
-                        sampling_list.append(file)
-                    if self.verbose:
-                        print(f"Added {file} with size {size} ; current archive is {current_size+size} bytes")
-                    current_size += size
-                    entry_to_remove = entry
-                    break
-
-            # if a file was just added, make sure we don't resample it
-            if entry_to_remove:
-                if self.verbose:
-                    print(f"Removing {entry_to_remove[0]} from consideration for further sampling")
-                file_size_list.remove(entry_to_remove)
-
-            # no files left to sample, exit
-            if len(file_size_list) == 0:
-                break
-
-            # no file added to sample this run, indicating failure
-            if initial_list_size == len(sampling_list):
-                failed_attempts += 1
-
-            # failed to add file 3 times, break out of loop
-            if failed_attempts >= 3:
-                print("Note: Several failed sampling attempts. Results may be inaccurate")
-                break
-
-        # no files could be sampled
-        if len(sampling_list) == 0:
-            raise Exception("Could not sample with provided percentage! Try a different percentage or use an exhaustive sammple")
-
-            
-        return sampling_list
-
-
-def validate_path(path: str) -> str:
-    """
-    Checks if a given path is a valid directory or file
-    """
-    if not os.path.isdir(path) and not os.path.isfile(path):
-        raise argparse.ArgumentTypeError(f"'{path}' does not exist as a file or directory")
-    return path
-
-
-def percent_type(value):
-    if not value.endswith('%'):
-        raise argparse.ArgumentTypeError("Percentage must end with '%'")
-    try:
-        percentage = float(value[:-1])
-        if not (0 <= percentage <= 100):
-            raise argparse.ArgumentTypeError("Percentage must be between 0 and 100")
-        return percentage/100
-    except ValueError:
-        raise argparse.ArgumentTypeError("Invalid percentage value")
-
-
-def file_comprestimator(input_path: Path | str):
-    comprestimator_exists = os.path.isfile(COMPRESTIMATOR_PATH)
-    if not comprestimator_exists:
-        raise FileNotFoundError(f"""Comprestimator executable not found  at {COMPRESTIMATOR_PATH}.  
-                                    Make sure you are running this python file from same directory as the comprestimator executable (and that you have compiled the executable with 'make')""")
-    _ = subprocess.run(["./comprestimator", "-d", input_path, "-r", COMPRESTIMATOR_RESULTS_PATH], check=True)
-    print(f"Comprestimator ran successfully, wrote results to {COMPRESTIMATOR_RESULTS_PATH}")
-
-
-def check_if_compressed(file: str, found_compressed_types: set):
-    for ext in KNOWN_COMPRESSED_FILE_SUFFIXES:
-        if file.endswith(ext):
-            found_compressed_types.add(ext)
-            return
+def is_excluded(root, file_name, excluded_patterns, skip_hidden, verbose):
+    full_path = os.path.join(root,file_name)
+    should_hide = (skip_hidden and file_name.startswith(".")) or \
+        any((fnmatch(full_path, pattern) or \
+             fnmatch(file_name, pattern)) for pattern in excluded_patterns)
+    if should_hide and verbose:
+        print(full_path, "is excluded, won't evaluate")
+    return should_hide
 
 
 def try_adding_file(file_path, files_with_sizes):
@@ -168,133 +38,143 @@ def try_adding_file(file_path, files_with_sizes):
     except OSError:
         print(f"OSError when adding file {file_path} for consideration")
         return 0
+    except Exception as e:
+        print(f"Error when adding file {file_path} for consideration: {e}")
+        return 0
 
 
-def is_excluded(root, file_name, excluded_patterns, skip_hidden):
-    full_path = os.path.join(root,file_name)
-    should_hide = (skip_hidden and file_name.startswith(".")) or \
-        any((fnmatch(full_path, pattern) or \
-             fnmatch(file_name, pattern)) for pattern in excluded_patterns)
-    if should_hide:
-        print(full_path, "is excluded, won't evaluate")
-    return should_hide
-
-def get_partial_file(file_entry):
-    file_name, amount_to_read, total_size = file_entry
-
-    random_start_point = random.randint(0, total_size-amount_to_read)
-    with open(file_name, 'rb') as f:
-        f.seek(random_start_point)
-        data_segment = f.read(amount_to_read)
+def pretty_units(size_in_bytes):
+    """
+    Convert a size in bytes to a human-readable format
+    """
     
-    data_buffer = io.BytesIO(data_segment)
+    units = ['bytes', 'KB', 'MB', 'GB', 'TB']
+    for unit in range(1, len(units)):
+        if size_in_bytes < 1024 ** (unit + 1):
+            return f"{size_in_bytes / 1024 ** unit:.2f} {units[unit]}"
+    return f"{size_in_bytes / 1024 ** len(units):.2f} {units[-1]}"
 
-    return len(data_segment), data_buffer
 
-def directory_comprestimator(src_dir: Path, sampling_strategy=SamplingStrategy.AUTO, sampling_percentage=None, skip_nested_directories=False, excluded_patterns=[], skip_hidden=False, keep_temp=False, verbose=False) -> list[str]:
+class BlockAbstraction():
     """
-    Given a directory path, randomly samples files and creates a tar archive from them, and then runs comprestimator on the archive
+        Abstracts a directory (or a file) into a single block object that 
+        can be indexed into and read from as if it were a block device
     """
-    files_with_sizes: list[tuple[str, int]] = []
-    total_size = 0
-    messages = []
 
-    # Walk directory, collecting files and their sizes
-    if skip_nested_directories:
-        print("Skipping nested directories...")
-        for path in os.listdir(src_dir):
-            full_path = os.path.join(src_dir, path)
-            if not is_excluded(src_dir, path, excluded_patterns, skip_hidden):
-                total_size += try_adding_file(full_path, files_with_sizes)
-    else:
-        for root, dirs, files in os.walk(src_dir):
+    def __build_dir_mapping__(self):
+        files_with_sizes: list[tuple[str, int]] = []
+        total_size = 0
+        print("\rMapping directory... ",
+          end="", flush=True)
+
+        # Walk directory, collecting files and their sizes
+        i = 0
+        for root, dirs, files in os.walk(self.path):
             # exclude paths we dont want
-            dirs[:] = [d for d in dirs if not is_excluded(root, d, excluded_patterns, skip_hidden)]
-            files[:] = [f for f in files if not is_excluded(root, f, excluded_patterns, skip_hidden)]
+            dirs[:] = [d for d in dirs if not is_excluded(root, d, self.flags.exclude, self.flags.skip_hidden, self.flags.verbose)]
+            files[:] = [f for f in files if not is_excluded(root, f, self.flags.exclude, self.flags.skip_hidden, self.flags.verbose)]
+
+            if self.flags.skip_nested_directories:
+                print(" Skipping nested directories")
+                dirs = []
 
             # for remaining files, consider them for sampling
             for file_name in files:
                 file_path = os.path.join(root, file_name)
                 total_size += try_adding_file(file_path, files_with_sizes)
+            i += 1
+            if i % 1000 == 0:
+                print(f"\rMapping directory... {pretty_units(total_size)} found across {len(files_with_sizes)} files", end="", flush=True)
+        print(f"\rMapping directory... {pretty_units(total_size)} found across {len(files_with_sizes)} files", flush=True)
 
-    if len(files_with_sizes) == 0 or total_size == 0:
-        raise Exception("Directory is empty or all files are empty!")
-    print(f"Directory has {len(files_with_sizes)} files totalling {total_size} bytes. Sampling files to create archive file...")
-    if total_size < 1_000_000:
-        raise Exception("Error: Directory is < 1 MB in size. For accurate results, more data is required")
 
-    # create list of files to archive
-    sample_size = DEFAULT_SAMPLE_FILE_SIZE
-    if sampling_strategy == SamplingStrategy.EXHAUSTIVE: # exhaustive, sample everything
-        sample_size = total_size
-    elif sampling_percentage is not None: # provided sampling percentage, so sample that much
-        sample_size = int(sampling_percentage * total_size)
-    else: # not exhaustive, no percentage provided (default behavior to sample 10%)
-        sample_size = max(DEFAULT_SAMPLE_FILE_SIZE, int(DEFAULT_SAMPLING_PERCENTAGE * total_size))
-    
-    print(f"Sampling up to {sample_size} bytes from directory")
+        if len(files_with_sizes) == 0 or total_size == 0:
+            raise Exception("Target directory is empty or all files are empty!")
+        
+        if total_size < 1_000_000:
+            print("Warning: Target directory is < 1 MB in size. For accurate results, more data is required")
 
-    sampler = Sampler(max_file_size=sample_size, verbose=verbose)        
-    files_sample = sampler.sample(sampling_strategy, files_with_sizes, total_size)
+        return files_with_sizes, total_size
 
-    print("Creating archive for comprestimator input...")
+    def __init__(self, path: str, args):
+        self.path = path
+        self.flags = args
+        self.files_processed = []
+        self.messages = []
 
-    current_dir = os.getcwd()
-    temp_file = tempfile.NamedTemporaryFile(delete=False, prefix=TEMP_FILE_PREFIX, dir=current_dir)
-    files_added = 0
-    try:
-        print("Creating temporary file for archive at", temp_file.name, "...")
-        # add sample files to archive
-        with open(temp_file.name, mode='wb') as out:
-            for file_entry in files_sample:
-                try:
-                    if isinstance(file_entry, list):
-                        size, data_buffer = get_partial_file(file_entry)
-                        out.write(struct.pack("<Q", size))
-                        shutil.copyfileobj(data_buffer, out, 1024*1024*64)
-                    else:
-                        size = os.path.getsize(file_entry)
-                        out.write(struct.pack("<Q", size))
-                        with open(file_entry, "rb") as f:
-                            shutil.copyfileobj(f, out, 1024*1024*64)
-                    files_added +=1
-                except PermissionError:
-                    print(f"Could not access {file_entry} due to insufficient permissions. Skipping...")
-
-        print("Running comprestimator on archive...")
-
-        # close archive and run comprestimator on it
-        temp_file.close()
-        file_comprestimator(temp_file.name)        
-
-        print("Comprestimator finished!")
-    finally: 
-        # delete archive
-        if keep_temp:
-            print(f"Keeping sampling file {temp_file.name} for future reuse")
+        if os.path.isdir(path):
+            mapping, size = self.__build_dir_mapping__()
+            self.__dir_mapping__ = mapping
+            self.size = size
         else:
-            print("Deleting temporary file...")
-            os.unlink(temp_file.name)
+            self.size = os.lstat(path).st_size
+            self.__dir_mapping__ = [(path, self.size)]
+            print(f"Found 1 file totalling {pretty_units(self.size)}")
 
-    # count permission errors
-    files_not_added = len(files_sample) - files_added
-    if files_not_added >= (.25 * len(files_sample)):
-        messages.append("Note: > 25%% of files in the sample could not be read due to lack of read permissions. Comprestimator result may be inaccurate")
+    def repeated_random_read(self, file, size, read_count, read_size) -> Generator[bytes, None]:
+        positions: list[int] = []
+        if read_size > size:
+            positions = [0] * read_count
+        else:
+            positions = sorted([random.randint(0, size-read_size) for _ in range(read_count)])
 
-    # count # of files vs % of directory size
-    if files_added < 0.05 * len(files_with_sizes):
-        messages.append("Note: < 5%% of files in the directory were sampled due to a low sampling percentage. Consider running the tool with a greater --sampling-percentage for more accurate results.")
+        try:
+            with open(file, 'rb') as f:
+                for pos in positions:
+                    f.seek(pos)
+                    data_segment = f.read(read_size)
+                    yield data_segment
+        except Exception as e:
+            print(f"\n\nError reading file {file}: {e} ... Skipping\n")
+            return None
+        return
 
-    return messages
+    def sample(self, num_samples):
+        _, weights = zip(*self.__dir_mapping__)
+        pre_sample_time = time.perf_counter()
+        sample = list(random.choices(self.__dir_mapping__, weights=weights, k=num_samples))
+        counted_samples = Counter(sample).items()
+        post_sample_time = time.perf_counter()
+
+        self.messages.append(f"\tTime building sample: {post_sample_time - pre_sample_time}")
+        return counted_samples
 
 
-def main():
-    # Parse arguments
+def parse_arguments():
+    """Parse and validate command line arguments."""
+
+    # type validation for argparsing --path 
+    def validate_path(path: str) -> str:
+        """
+        Checks if a given path is a valid directory or file
+        """
+        if not os.path.isdir(path) and not os.path.isfile(path):
+            raise argparse.ArgumentTypeError(f"'{path}' does not exist as a file or directory")
+        return path
+
+
+    # type validation for argparsing --sampling-percentage
+    def percent_type(value):
+        if not value.endswith('%'):
+            raise argparse.ArgumentTypeError("Percentage must end with '%'")
+        try:
+            percentage = float(value[:-1])
+            if not (0 <= percentage <= 100):
+                raise argparse.ArgumentTypeError("Percentage must be between 0 and 100")
+            return percentage/100
+        except ValueError:
+            raise argparse.ArgumentTypeError("Invalid percentage value")
+
     parser = argparse.ArgumentParser(description="Estimates FCM Compression on GPFS for a given input file/directory")
-    parser.add_argument('-p', '--path', type=validate_path, required=True, help="Path to input file/directory")  # path to process
+    parser.add_argument('-p', '--path', type=validate_path, required=True, help="Path to input file/directory")
+
     sampling_args = parser.add_mutually_exclusive_group()
-    sampling_args.add_argument('--exhaustive-sampling', action="store_true", help="Samples entire input directory for greatest accuracy. Note this will be slow on large directories")
-    sampling_args.add_argument('--sampling-percentage', type=percent_type, default=None, help="Percentage of input directory size to sample (e.g. 10%%). Increasing this percentage will increase accuracy but slow down the tool.")
+    sampling_args.add_argument('--exhaustive-sampling', action="store_true",
+                              help="Samples entire input directory for greatest accuracy. Note this will be slow on large directories")
+    sampling_args.add_argument('--sampling-percentage', type=percent_type, default=DEFAULT_SAMPLING_PERCENTAGE,
+                              help="Percentage of input directory size to sample (e.g. 10%%). Increasing this percentage will increase accuracy but slow down the tool.")
+    
+    parser.add_argument('--threads', type=int, default=0, help="Number of threads to use for sampling (Defaults to # of CPU Cores)")
     parser.add_argument(
         '--exclude',
         metavar='FILE',
@@ -304,85 +184,161 @@ def main():
         help='File/Directory names to exclude (can be used multiple times to exclude multiple files)'
     )
     parser.add_argument('--verbose', action="store_true", help="Will output detailed logging information")
-    parser.add_argument('--keep-temp-file', action="store_true", help="Won't delete the temp file created in the run.")
-    parser.add_argument('--skip-nested-directories', action="store_true", help="Will not sample directories nested within target directory, only files")
-    parser.add_argument('--skip-hidden', action="store_true", help="Will not sample hidden directories and files within the target directory")
+    parser.add_argument('--skip-nested-directories', action="store_true",
+                       help="Will not sample directories nested within target directory, only files")
+    parser.add_argument('--skip-hidden', action="store_true",
+                       help="Will not sample hidden directories and files within the target directory")
+    return parser.parse_args()
 
-    args = parser.parse_args()
-    input_path = args.path
 
-    skip_nested_directories = False
-    sampling_strategy = SamplingStrategy.AUTO
-    sampling_percentage = None
-    skip_hidden = args.skip_hidden
-    verbose = args.verbose
-    keep_temp = args.keep_temp_file
+def _print_compression_progress(pre_compression, post_compression, samples_taken, num_samples, time_elapsed):
+    """Print real-time compression progress."""
+    ratio = pre_compression / post_compression
+    progress = samples_taken / num_samples * 100
+    compressor_rate = int(pre_compression / time_elapsed)
+    print(f"\rEstimated Compression Ratio: {ratio:.3f}x | {progress:.2f}% ({pretty_units(compressor_rate)}/s)",
+          end="", flush=True)
 
-    if args.skip_nested_directories:
-        skip_nested_directories = True
 
-    excluded_patterns = args.exclude
+def compress_sample(block_data, processing_queue, results_queue):
+    """Compression thread to run in parallel with the main thread."""
+    # thread_id = random.randint(1, 1000)
+    while True:
+        # Get the next sample
+        task = processing_queue.get()
+        # print(f"{thread_id} - got an item to process!")
+        if task is None:
+            processing_queue.task_done()
+            results_queue.put(None)
+            return
 
-    # Handle mutually exclusive arguments: sample a % of directory or the entire thing
-    if args.exhaustive_sampling:
-        sampling_strategy = SamplingStrategy.EXHAUSTIVE
-    elif args.sampling_percentage is not None:
-        sampling_percentage = args.sampling_percentage
+        # Compress the sample
+        entry, count = task
+        file, size = entry
+        # pre_compression = 0
+        # post_compression= 0
+        for buffer in block_data.repeated_random_read(file, size, count, FCM_BLOCKSIZE):
+            if buffer is None:
+                continue
 
-    # Check for existing sample files
-    current_dir = os.getcwd()
-    existing_sample = False
-    potential_samples = [p for p in Path(current_dir).glob(f'{TEMP_FILE_PREFIX}*') if p.is_file()]
-    if len(potential_samples) > 0:
-        print("Found the following existing samples: ")
-        for index, sample in enumerate(potential_samples):
-            print(f"{index+1}) {sample}")
-        use_sample = input("Enter sample number to use one of the existing samples, or leave blank to run from scratch: ")
-        if len(use_sample) != 0:
-            sample_index = int(use_sample) - 1
-            input_path = potential_samples[sample_index]
-            existing_sample=True
+            compressor = zlib.compressobj(level=1, memLevel=1, wbits=-9)
+            pre_compression = len(buffer)
+            post_compression = (
+                len(compressor.compress(buffer)) +
+                len(compressor.flush())
+            )
+            results_queue.put((pre_compression, post_compression))
 
-    # Run Comprestimator on file or directory
-    path_is_a_directory = os.path.isdir(input_path)
-    messages = []
-    if path_is_a_directory and not existing_sample:
-        # If input is a directory, convert it to a file and run comprestimator on that
-        print(f"'{input_path}' is a directory, sampling to create an input file for comprestimator. This may take a while for deeply nested directories...")
-        messages = directory_comprestimator(input_path, sampling_strategy, \
-                                  sampling_percentage, skip_nested_directories, \
-                                    excluded_patterns, skip_hidden, keep_temp, verbose)
-    else:
-        # If input is a file, just run comprestimator on it directly
-        print(f"'{input_path}' is a file, sampling directly with comprestimator...")
-        file_comprestimator(input_path)
+        processing_queue.task_done()
 
-    # Extract results from comprestimator results file and print them
-    with open(COMPRESTIMATOR_RESULTS_PATH, 'r') as file:
-        reader = csv.reader(file)
-        data = list(reader)
-        if not data:
-            raise Exception("Comprestimator results file empty!")
-        
-        most_recent_results = data[-1]
-        initial_size = float(most_recent_results[12])
-        compressed_size = float(most_recent_results[15])
-        
-    # Print final results
-    print()
+
+def compress_samples(block_data: BlockAbstraction, num_samples, num_threads=1):
+    """
+    Compress samples and track metrics.
+    
+    Returns:
+        tuple: (pre_compression, post_compression, time_compressing)
+    """
+    pre_compression = 0
+    post_compression = 0
+    
+    pre_compress_time = time.perf_counter()
+    samples = block_data.sample(num_samples)
+    
+    # prepare samples for multi-threaded processing
+    processing_queue = Queue()
+    results_queue = Queue()
+    for sample in samples:
+        processing_queue.put(sample)
+    for _ in range(num_threads):
+        processing_queue.put(None)
+
+    # start up compressor threads
+    threads = []
+    for _ in range(num_threads):
+        thread = Thread(target=compress_sample, args=(block_data, processing_queue, results_queue))
+        thread.start()
+        threads.append(thread)
+    print(f"Started {len(threads)} compressor threads")
+
+    # accumulate results from the compressor threads
+    threads_finished = 0
+    i = 0
+    while threads_finished < num_threads:
+        result = results_queue.get()
+        if result is None:
+            threads_finished += 1
+            continue
+        # print("hello")
+        i += 1
+        pre_compression += result[0]
+        post_compression += result[1]
+        if i % LOG_INTERVAL == 0:
+            time_elapsed = time.perf_counter() - pre_compress_time
+            _print_compression_progress(pre_compression, post_compression, i, num_samples, time_elapsed)
+    
+    time_compressing = time.perf_counter() - pre_compress_time
+    return pre_compression, post_compression, time_compressing
+
+
+def print_results(pre_compression, post_compression, start_time, finish_tree_time,
+                 finish_sample_time, time_compressing, messages):
+    """Print final compression results and timing information."""
+    print("\n")
     print("*" * 20)
     print("Comprestimator Results:")
-    print(f"Pre-compression sample size  : {initial_size}")
-    print(f"Post-compression sample size : {compressed_size}")
-    if compressed_size == 0:
+    print(f"Pre-compression sample size  : {pre_compression} bytes ({pretty_units(pre_compression)})")
+    print(f"Post-compression sample size : {post_compression} bytes ({pretty_units(post_compression)})")
+    
+    if post_compression == 0:
         print("Error! Post-compression size is 0; Cannot get compression ratio")
     else:
-        print(f"Estimated Compression Ratio  : {initial_size/compressed_size}x")
-
+        ratio = pre_compression / post_compression
+        print(f"Estimated Compression Ratio  : {ratio:.3f}x")
+    
     print()
-    if len(messages) > 0:
-        for message in messages:
-            print(message)
+    print("Time Mapping Directory: ", finish_tree_time - start_time)
+    print("Time Sampling: ", finish_sample_time - finish_tree_time)
+    
+    for message in messages:
+        print(message)
+    
+    print("\tTime compressing: ", time_compressing)
+    print("Total time: ", finish_sample_time - start_time)
+
+
+def main():
+    # Parse arguments
+    args = parse_arguments()
+
+    # Get the number of threads to use
+    num_threads = 1
+    if args.threads > 0:
+        num_threads = args.threads
+    else:
+        cpu_count = os.cpu_count()
+        if cpu_count is not None:
+            num_threads = cpu_count
+            num_threads = 1
+    
+    # Build block abstraction and calculate samples
+    start = time.perf_counter()
+    block_data = BlockAbstraction(args.path, args)
+    finish_tree_time = time.perf_counter()
+    
+    partition_count = block_data.size // FCM_BLOCKSIZE
+    num_samples = partition_count if args.exhaustive_sampling else int(partition_count * args.sampling_percentage)
+    
+    print(f"Sampling {num_samples/partition_count*100:.2f}% of target ({pretty_units(num_samples*FCM_BLOCKSIZE)})...", end=" ")
+    
+
+    pre_compression, post_compression, time_compressing = compress_samples(block_data, num_samples, num_threads)
+    finish_sample_time = time.perf_counter()
+    
+    # Print results
+    print_results(pre_compression, post_compression, start, finish_tree_time,
+                 finish_sample_time, time_compressing, block_data.messages)
+
 
 if __name__ == "__main__":
     main()
