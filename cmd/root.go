@@ -1,7 +1,3 @@
-/*
-Copyright © 2026 IBM Corporation
-
-*/
 package cmd
 
 import (
@@ -446,4 +442,3 @@ func runComprestimator(cmd *cobra.Command) {
     res := <-finalResult
     displayResults(res)
 }
-
