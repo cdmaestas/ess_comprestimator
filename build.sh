@@ -50,25 +50,18 @@ echo "Platform: $HOST_OS → building $PLATFORM package"
 
 # ── Step 1: Build the Go binary ───────────────────────────────────────────────
 echo "==> [1/5]  Build ess_comprestimator Go binary"
-if command -v go &>/dev/null; then
-  if go build -o ess_comprestimator . 2>/dev/null; then
-    echo "    Built: $ROOT/ess_comprestimator"
-  else
-    echo "    WARN: go build failed — binary will not be bundled."
-    echo "          The app will start but jobs will report 'binary not found'."
-  fi
-else
-  echo "    WARN: go not found on PATH — skipping build."
+if ! command -v go &>/dev/null; then
+  echo "ERROR: Go compiler not found on PATH"
+  echo "       Install Go: brew install go"
+  exit 1
 fi
 
-# electron-builder fails if a file listed in extraResources is missing.
-# Create an executable stub so packaging always succeeds even without the binary.
-if [[ ! -f ess_comprestimator ]]; then
-  printf '#!/bin/sh\necho "ess_comprestimator: real binary not bundled — set COMPRESTIMATOR_PATH." >&2\nexit 1\n' \
-    > ess_comprestimator
-  chmod +x ess_comprestimator
-  echo "    Created stub ess_comprestimator placeholder for packaging."
+if ! go build -o ess_comprestimator .; then
+  echo "ERROR: go build failed"
+  exit 1
 fi
+
+echo "    Built: $ROOT/ess_comprestimator"
 
 # ── Step 2: Build the React frontend ─────────────────────────────────────────
 if [[ "$SKIP_FRONTEND" == "true" ]]; then

@@ -98,11 +98,15 @@ The packaged desktop app bundles the backend, frontend, and Go binary into a dou
 
 ### Prerequisites
 
+**Required:**
+
 | Tool | macOS | Linux |
 |------|-------|-------|
 | Go 1.21+ | `brew install go` | `sudo apt install golang-go` |
 | Python 3.9+ | `brew install python` | `sudo apt install python3 python3-venv` |
 | Node 18+ | `brew install node` | `sudo apt install nodejs npm` |
+
+> **Go is required** — the build will fail if `go` is not found on PATH.
 
 Install frontend and Electron dependencies:
 ```bash
