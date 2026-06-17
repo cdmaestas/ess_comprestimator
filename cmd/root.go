@@ -224,7 +224,12 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         }
 
         // Compress the sample (use only bytes actually read)
+        // Suppress stderr output from minlz library during compression
+        oldStderr := os.Stderr
+        os.Stderr, _ = os.Open(os.DevNull)
         compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelBalanced)
+        os.Stderr = oldStderr
+        
         if err != nil {
             // Skip this sample if compression fails
             failedSamples++
