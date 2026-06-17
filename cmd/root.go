@@ -223,7 +223,8 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         pre += int64(n)
         compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelBalanced)
         if err != nil {
-            return 0, 0, 0, err
+            // Skip this sample if compression fails, don't fail entire operation
+            continue
         }
         post += int64(len(compressed))
 
