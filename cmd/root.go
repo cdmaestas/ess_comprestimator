@@ -6,6 +6,7 @@ import (
     "math/rand"
     "sync"
     "math"
+    "syscall"
     "github.com/spf13/cobra"
     "github.com/minio/minlz"
     wr "github.com/mroth/weightedrand"
@@ -224,11 +225,16 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         }
 
         // Compress the sample (use only bytes actually read)
-        // Suppress stderr output from minlz library during compression
-        oldStderr := os.Stderr
-        os.Stderr, _ = os.Open(os.DevNull)
+        // Suppress stderr at file descriptor level (minlz writes directly to fd 2)
+        devNull, _ := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+        oldStderr, _ := syscall.Dup(2)
+        syscall.Dup2(int(devNull.Fd()), 2)
+        
         compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelBalanced)
-        os.Stderr = oldStderr
+        
+        syscall.Dup2(oldStderr, 2)
+        syscall.Close(oldStderr)
+        devNull.Close()
         
         if err != nil {
             // Skip this sample if compression fails
