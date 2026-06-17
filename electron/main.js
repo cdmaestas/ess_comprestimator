@@ -100,8 +100,7 @@ async function startBackend() {
     ...(fs.existsSync(compBin) ? { COMPRESTIMATOR_PATH: compBin } : {}),
   }
 
-  backendProc = spawn(bin, [], { env, stdio: ['ignore', 'pipe', 'pipe'] })
-  backendProc.stderr.on('data', (d) => process.stderr.write(`[backend] ${d}`))
+  backendProc = spawn(bin, [], { env, stdio: ['ignore', 'pipe', 'ignore'] })
   backendProc.on('exit', (code, signal) => {
     console.log(`[backend] exited  code=${code}  signal=${signal}`)
   })
