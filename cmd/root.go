@@ -224,9 +224,10 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         }
 
         // Compress the sample (use only bytes actually read)
-        compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelSuperFast)
+        // Use TryEncode which returns nil on error instead of panicking
+        compressed := minlz.TryEncode(nil, buffer[:n], minlz.LevelSuperFast)
         
-        if err != nil {
+        if compressed == nil {
             // Skip this sample if compression fails
             failedSamples++
             if failedSamples >= maxConsecutiveFailures {
