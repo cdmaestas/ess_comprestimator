@@ -283,7 +283,11 @@ async def get_logs(
         GET /api/jobs/{id}/logs?since=12  → lines 12-N
     """
     state = await _get_or_404(job_id)
-    lines = state.log_lines[since:]
+    # Filter out minlz error messages from log lines before returning
+    lines = [
+        line for line in state.log_lines[since:]
+        if not ("Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]"))
+    ]
     done = state.status in (JobStatus.COMPLETE, JobStatus.FAILED)
     return JSONResponse(
         content={
@@ -328,7 +332,9 @@ async def stream_job(websocket: WebSocket, job_id: str) -> None:
     # ── Replay finished jobs immediately ──────────────────────────────────────
     if state.status in (JobStatus.COMPLETE, JobStatus.FAILED):
         for line in state.log_lines:
-            await websocket.send_json({"type": "log", "line": line})
+            # Filter out minlz error messages
+            if not ("Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]")):
+                await websocket.send_json({"type": "log", "line": line})
         await websocket.send_json({"type": "status", "status": state.status.value})
         await websocket.close()
         return
@@ -348,6 +354,12 @@ async def stream_job(websocket: WebSocket, job_id: str) -> None:
                 # Sentinel: runner has closed the stream.
                 break
 
+            # Filter out minlz error messages from live stream
+            if msg.get("type") == "log":
+                line = msg.get("line", "")
+                if "Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]"):
+                    continue
+            
             await websocket.send_json(msg)
 
             if msg.get("type") == "status" and msg.get("status") in (
