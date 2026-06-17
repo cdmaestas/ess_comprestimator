@@ -13,7 +13,12 @@ The app serves:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+# PyInstaller compatibility: add extracted directory to sys.path
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    sys.path.insert(0, sys._MEIPASS)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
