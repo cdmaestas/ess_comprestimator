@@ -131,24 +131,56 @@ async def run_job(job_id: str) -> None:
                 assert proc.stdout is not None
                 assert proc.stderr is not None
                 
-                # Read stdout and stderr concurrently
+                # Read stdout byte-by-byte to capture \r-terminated progress updates
                 async def read_stdout():
-                    async for raw_line in proc.stdout:
-                        line = raw_line.decode(errors="replace").rstrip("\r\n")
-                        if "\r" in line:
-                            line = line.split("\r")[-1].strip()
-                        # Filter out minlz error messages from stdout
-                        if "Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]"):
-                            continue
-                        if line:
-                            await registry.push_log(job_id, line)
-                            output_lines.append(line)
+                    buffer = bytearray()
+                    last_progress_line = ""
+                    while True:
+                        chunk = await proc.stdout.read(1)
+                        if not chunk:
+                            break
+                        
+                        buffer.extend(chunk)
+                        
+                        # Process on \n or \r
+                        if chunk in (b'\n', b'\r'):
+                            if buffer:
+                                line = buffer.decode(errors="replace").strip()
+                                if line:
+                                    output_lines.append(line)
+                                    
+                                    # Skip minlz errors
+                                    if "Separator is not found" in line or "chunk exceed" in line or "[ERROR]" in line:
+                                        buffer.clear()
+                                        continue
+                                    
+                                    # For progress lines (with \r), only send if content changed
+                                    # Progress lines contain "Ratio:" or "Progress"
+                                    is_progress = "Ratio:" in line or "Progress" in line
+                                    
+                                    if chunk == b'\r' and is_progress:
+                                        # Only send if different from last progress line
+                                        if line != last_progress_line:
+                                            await registry.push_log(job_id, line)
+                                            last_progress_line = line
+                                    else:
+                                        # Regular line with \n - always send
+                                        await registry.push_log(job_id, line)
+                                        last_progress_line = ""  # Reset progress tracking
+                                
+                                buffer.clear()
                 
                 async def read_stderr():
                     async for raw_line in proc.stderr:
                         line = raw_line.decode(errors="replace").rstrip("\r\n")
-                        # Filter out minlz library errors - skip any line containing these phrases
-                        if "Separator is not found" in line or "chunk exceed" in line or "[ERROR]" in line:
+                        # Accumulate stderr for debugging but don't display minlz errors
+                        if line:
+                            output_lines.append(f"[STDERR] {line}")
+                        # Filter out minlz library errors and error log notifications from UI
+                        if ("Separator is not found" in line or 
+                            "chunk exceed" in line or 
+                            "[ERROR]" in line or
+                            "Error log created at" in line):
                             continue
                         if line:
                             await registry.push_log(job_id, f"[STDERR] {line}")
@@ -158,16 +190,35 @@ async def run_job(job_id: str) -> None:
                 registry.deregister_proc(job_id)
                 state.pid = None
 
-                # Return code -15 = SIGTERM (user cancelled)
+                # Check exit status
                 if proc.returncode == -15:
                     raise RuntimeError("Job cancelled by user")
-                if proc.returncode != 0:
-                    raise RuntimeError(
-                        f"comprestimator exited with code {proc.returncode}"
-                    )
-
-                # ── Parse results from accumulated stdout ──────────────────────
-                state.result = CompressionResult.from_stdout("\n".join(output_lines))
+                
+                # Check if binary produced results section (even if exit code is 0)
+                full_output = "\n".join(output_lines)
+                has_results = "-- Comprestimator Results" in full_output
+                
+                if proc.returncode != 0 or not has_results:
+                    # Binary failed or exited early without results
+                    output_sample = "\n".join(output_lines[-15:]) if output_lines else "(no output)"
+                    
+                    if not has_results and "Mapping directory" in full_output:
+                        # Binary stopped during directory mapping phase
+                        raise RuntimeError(
+                            f"Binary stopped during directory scan (exit code {proc.returncode}). "
+                            f"Check path permissions and exclude patterns.\n{output_sample}"
+                        )
+                    elif proc.returncode != 0:
+                        raise RuntimeError(
+                            f"Binary exited with code {proc.returncode}.\n{output_sample}"
+                        )
+                    else:
+                        raise RuntimeError(
+                            f"Binary completed but produced no results.\n{output_sample}"
+                        )
+                
+                # Parse results from output
+                state.result = CompressionResult.from_stdout(full_output)
 
             # ── Transition to COMPLETE ─────────────────────────────────────────
             state.status = JobStatus.COMPLETE
@@ -176,13 +227,34 @@ async def run_job(job_id: str) -> None:
             await registry.push_status(job_id, JobStatus.COMPLETE)
 
         except Exception as exc:  # noqa: BLE001
+            error_msg = str(exc)
+            
+            # Categorize failure for clearer diagnostics
+            if "Could not find compression results" in error_msg:
+                # Binary ran but produced no results section
+                output_sample = "\n".join(output_lines[-15:]) if output_lines else "(no output)"
+                
+                # Check for common causes
+                if any("0 files" in line or "no files" in line.lower() for line in output_lines):
+                    state.error = "No files found to compress (check exclude patterns and permissions)"
+                elif any("error" in line.lower() for line in output_lines):
+                    state.error = "Binary encountered errors during execution (check error log)"
+                else:
+                    state.error = "Binary completed but produced no compression results"
+                
+                await registry.push_log(job_id, f"[ERROR] {state.error}")
+                await registry.push_log(job_id, f"[DEBUG] Full output:\n{output_sample}")
+            elif "Separator is not found" in error_msg or "chunk exceed" in error_msg:
+                state.error = f"Compression library warning: {error_msg}"
+            else:
+                await registry.push_log(job_id, f"[ERROR] {error_msg}")
+                state.error = error_msg
+            
             state.status = JobStatus.FAILED
-            state.error = str(exc)
             state.completed_at = datetime.now(timezone.utc)
             registry.deregister_proc(job_id)
             state.pid = None
             await registry.update(state)
-            await registry.push_log(job_id, f"[ERROR] {exc}")
             await registry.push_status(job_id, JobStatus.FAILED)
 
         finally:
