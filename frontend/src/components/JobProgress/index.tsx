@@ -99,9 +99,31 @@ export default function JobProgress({
             Waiting for output…
           </span>
         ) : (
-          lines.map((line, i) => (
-            <div key={i}>{line}</div>
-          ))
+          (() => {
+            // Group lines: replace consecutive progress lines with only the last one
+            const displayLines: string[] = []
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i]
+              const isProgress = line.includes('Ratio:') || line.includes('Progress')
+              
+              if (isProgress) {
+                // Look ahead to see if there are more progress lines
+                let j = i + 1
+                while (j < lines.length && (lines[j].includes('Ratio:') || lines[j].includes('Progress'))) {
+                  j++
+                }
+                // Only show the last progress line in this sequence
+                displayLines.push(lines[j - 1])
+                i = j - 1 // Skip to the last progress line
+              } else {
+                displayLines.push(line)
+              }
+            }
+            
+            return displayLines.map((line, i) => (
+              <div key={i}>{line}</div>
+            ))
+          })()
         )}
         <div ref={bottomRef} className="log-panel__bottom" />
       </div>
