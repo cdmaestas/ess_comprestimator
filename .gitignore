@@ -1,3 +1,27 @@
-build.sh
+# Build artifacts
+ess_comprestimator
+build/
+dist/
+dist-electron/
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+electron/node_modules/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs & temp
 *.log
+comprestimator_errors.log
+results.csv
+
+# macOS
+.DS_Store
+
+# Legacy (kept for reference)
 releases/
