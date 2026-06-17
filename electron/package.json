@@ -31,8 +31,8 @@
         "to": "backend/comprestimator-backend"
       },
       {
-        "from": "../comprestimator",
-        "to": "comprestimator",
+        "from": "../ess_comprestimator",
+        "to": "ess_comprestimator",
         "filter": [
           "**/*"
         ]

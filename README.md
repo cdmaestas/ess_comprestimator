@@ -11,6 +11,7 @@ Modified for ESS by _Sarvesh Chezhian_.
 
 - [Installation](#installation)
 - [Using the app](#using-the-app)
+- [Understanding the results](#understanding-the-results)
 - [Building from source](#building-from-source)
 - [Command-line interface](#command-line-interface)
 - [Development](#development)
@@ -68,33 +69,40 @@ After install, launch **Comprestimator** from your application menu, or run `com
 2. **Choose a sampling mode:**
    - *Auto (default)* — samples 10% of the data; switches to exhaustive for directories under 1 MB.
    - *Exhaustive* — reads every file; most accurate but slowest.
-   - *Percentage* — enter a custom sample percentage (e.g. `25%`).
+   - *Percentage* — enter a custom sample percentage (e.g. `25`).
 3. **Optional filters:**
    - *Skip hidden files* — ignore dotfiles and hidden directories.
-   - *Top-level only* — do not descend into subdirectories.
    - *Exclude patterns* — comma-separated filenames or globs (e.g. `*.log`, `node_modules`).
 4. Click **Run** and watch the live log output.
 5. When the job completes, the **Results** panel shows:
    - Estimated compression ratio and interpretation (Excellent / Good / Moderate / Low)
    - Size reduction percentage and before/after chart
-   - Sample size, blocks read, run time
+   - Sample size, run time
    - **Download CSV** to export the raw numbers.
 
 > Jobs are queued — you can submit multiple runs and they execute one at a time. Previous jobs remain visible in the list on the home screen.
 
 ---
 
+## Understanding the results
+
+- **Estimated Compression Ratio** — e.g. `3.5x` means data compresses to ~28% of its original size.
+- **FCM4 drive cap** — FCM4 drives are physically limited to 4x compression. If the estimate exceeds 4x, use 4x when provisioning vdisksets.
+- **Sampling accuracy** — the default 10% sample gives good accuracy for most workloads, especially for directories with uniform file types or directories larger than 1 GB. For very large directories (100 TB+) even 1% sampling provides reliable results.
+
+---
+
 ## Building from source
 
-The easiest way to use the tool is the packaged desktop app, which bundles the backend, frontend, and C binary into a double-clickable installer.
+The packaged desktop app bundles the backend, frontend, and Go binary into a double-clickable installer.
 
 ### Prerequisites
 
 | Tool | macOS | Linux |
 |------|-------|-------|
+| Go 1.21+ | `brew install go` | `sudo apt install golang-go` |
 | Python 3.9+ | `brew install python` | `sudo apt install python3 python3-venv` |
 | Node 18+ | `brew install node` | `sudo apt install nodejs npm` |
-| GCC | Xcode Command Line Tools (`xcode-select --install`) | `sudo apt install gcc` |
 
 Install frontend and Electron dependencies:
 ```bash
@@ -135,10 +143,9 @@ You can skip steps that are already up to date:
 
 ### Requirements
 
-- Python 3.x on PATH
-- C binary compiled via `make` (see below)
+- Go 1.21+ (to build) or a pre-compiled `ess_comprestimator` binary
 
-### Build the C binary
+### Build the binary
 
 ```bash
 make
@@ -149,34 +156,43 @@ Works on Linux (x86_64) and macOS (arm64, x86_64).
 ### Run
 
 ```bash
-python3 run_comprestimator.py --path <file or directory>
+./ess_comprestimator --path <file or directory>
 ```
 
 #### Sampling options
 
 | Flag | Description |
 |------|-------------|
-| *(default)* | Auto: 10% sample, or exhaustive if directory < 10 GB |
-| `--exhaustive-sampling` | Scan entire directory — most accurate, slowest |
-| `--sampling-percentage 25%` | Sample a specific percentage of the directory |
+| *(default)* | 10% sample |
+| `--exhaustive-sample` | Scan entire directory — most accurate, slowest |
+| `--sampling-percentage 25` | Sample a specific percentage (integer, no `%`) |
 
 #### Filter options
 
 | Flag | Description |
 |------|-------------|
-| `--skip-hidden` | Skip hidden files and directories (names starting with `.`) |
-| `--skip-nested-directories` | Only scan the top level of the target directory |
-| `--exclude FILE ...` | Exclude specific filenames or glob patterns |
+| `--exclude-hidden` | Skip hidden files and directories (names starting with `.`) |
+| `--exclude PATTERN` | Exclude filenames or glob patterns (repeatable) |
+
+#### Performance options
+
+| Flag | Description |
+|------|-------------|
+| `--threads N` | Number of parallel compression workers (default: logical CPU count) |
+| `--error-log FILE` | Write unreadable file paths to a log (default: `comprestimator_errors.log`) |
 
 #### Examples
 
 ```bash
 # Estimate compression for a directory using 25% sampling
-python3 run_comprestimator.py --path /data/myvolume --sampling-percentage 25%
+./ess_comprestimator --path /data/myvolume --sampling-percentage 25
 
 # Exhaustive scan, skipping hidden files and node_modules
-python3 run_comprestimator.py --path /data/myvolume --exhaustive-sampling \
-    --skip-hidden --exclude node_modules "*.log"
+./ess_comprestimator --path /data/myvolume --exhaustive-sample \
+    --exclude-hidden --exclude node_modules --exclude "*.log"
+
+# Use 8 threads for a large parallel scan
+./ess_comprestimator --path /data/myvolume --threads 8
 ```
 
 ---
@@ -194,7 +210,7 @@ Run the FastAPI backend and Vite frontend side-by-side without packaging:
 | Frontend (Vite) | http://localhost:5173 |
 | Backend API docs | http://localhost:8000/api/docs |
 
-Run with the mock binary (no C binary needed):
+Run with the mock binary (no Go binary needed):
 
 ```bash
 MOCK_BINARY=true ./dev.sh
@@ -220,7 +236,7 @@ This removes:
 
 | Path | Contents |
 |------|----------|
-| `comprestimator`, `comprestimator.o` | Compiled C binary and object file |
+| `ess_comprestimator` | Compiled Go binary |
 | `build/` | PyInstaller work directory |
 | `dist/` | PyInstaller output (`comprestimator-backend`) |
 | `dist-electron/` | Packaged installers (`.dmg`, `.AppImage`, `.deb`, `.rpm`) |

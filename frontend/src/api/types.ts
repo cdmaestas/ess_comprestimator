@@ -9,7 +9,6 @@ export interface JobRequest {
   exhaustive_sampling?: boolean
   sampling_percentage?: number | null
   exclude?: string[]
-  skip_nested_directories?: boolean
   skip_hidden?: boolean
 }
 

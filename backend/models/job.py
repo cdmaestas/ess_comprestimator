@@ -52,10 +52,6 @@ class JobRequest(BaseModel):
                     f"CLI flag by the subprocess): {pattern!r}"
                 )
         return v
-    skip_nested_directories: bool = Field(
-        False,
-        description="Only sample files directly inside the target directory",
-    )
     skip_hidden: bool = Field(
         False,
         description="Skip hidden files and directories (names starting with '.')",
