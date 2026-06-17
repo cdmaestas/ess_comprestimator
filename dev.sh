@@ -4,10 +4,6 @@
 # Usage:
 #   ./dev.sh           — real binary (must run `make` first)
 #   MOCK_BINARY=true ./dev.sh  — synthetic results, no binary needed
-#
-# Requires:
-#   - Python 3.9+  with backend/requirements.txt installed
-#   - Node 18+     with frontend/node_modules installed  (npm install in frontend/)
 
 set -euo pipefail
 
@@ -16,8 +12,25 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 export MOCK_BINARY="${MOCK_BINARY:-false}"
-export COMPRESTIMATOR_PATH="${COMPRESTIMATOR_PATH:-$REPO_ROOT/comprestimator}"
+export COMPRESTIMATOR_PATH="${COMPRESTIMATOR_PATH:-$REPO_ROOT/ess_comprestimator}"
 export DEV_CORS="true"   # allow the Vite dev server origin in the CORS allowlist
+
+# ── Python deps ───────────────────────────────────────────────────────────────
+VENV="$REPO_ROOT/.venv"
+if [[ ! -f "$VENV/bin/activate" ]]; then
+  echo "▶ Creating Python virtual environment…"
+  python3 -m venv "$VENV"
+fi
+# shellcheck disable=SC1091
+source "$VENV/bin/activate"
+pip install --quiet --upgrade pip
+pip install --quiet -r "$REPO_ROOT/backend/requirements.txt"
+
+# ── Node deps ─────────────────────────────────────────────────────────────────
+if [[ ! -d "$REPO_ROOT/frontend/node_modules" ]]; then
+  echo "▶ Installing frontend dependencies…"
+  (cd "$REPO_ROOT/frontend" && npm install)
+fi
 
 echo "▶ Starting backend on :$BACKEND_PORT  (MOCK_BINARY=$MOCK_BINARY)"
 python3 -m uvicorn backend.main:app \

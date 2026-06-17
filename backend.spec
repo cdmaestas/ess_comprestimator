@@ -18,10 +18,6 @@ a = Analysis(
         # which points to sys._MEIPASS in a frozen executable — so this
         # relative destination must match exactly.
         (str(ROOT / "frontend" / "dist"), "frontend/dist"),
-        # runner.py invokes run_comprestimator.py via the system Python3.
-        # Bundling it here puts it at sys._MEIPASS/run_comprestimator.py,
-        # which is where runner._SCRIPT_PATH resolves in frozen mode.
-        (str(ROOT / "run_comprestimator.py"), "."),
     ],
     hiddenimports=[
         # uvicorn internals that PyInstaller misses via static analysis
