@@ -118,7 +118,7 @@ async def run_job(job_id: str) -> None:
                 proc = await asyncio.create_subprocess_exec(
                     *cli_args,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,  # suppress stderr (minlz errors)
+                    stderr=asyncio.subprocess.STDOUT,  # merge stderr into stdout for error visibility
                 )
 
                 # Store handle + PID so DELETE /api/jobs/{id} can cancel it.
