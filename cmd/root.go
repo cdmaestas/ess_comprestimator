@@ -225,14 +225,18 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         }
 
         // Compress the sample (use only bytes actually read)
-        // Suppress stderr at file descriptor level (minlz writes directly to fd 2)
+        // Suppress both stdout and stderr at file descriptor level
         devNull, _ := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+        oldStdout, _ := syscall.Dup(1)
         oldStderr, _ := syscall.Dup(2)
+        syscall.Dup2(int(devNull.Fd()), 1)
         syscall.Dup2(int(devNull.Fd()), 2)
         
         compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelBalanced)
         
+        syscall.Dup2(oldStdout, 1)
         syscall.Dup2(oldStderr, 2)
+        syscall.Close(oldStdout)
         syscall.Close(oldStderr)
         devNull.Close()
         
