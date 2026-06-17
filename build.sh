@@ -56,6 +56,9 @@ if ! command -v go &>/dev/null; then
   exit 1
 fi
 
+# Remove existing binary to avoid "already exists and is not an object file" error
+rm -f ess_comprestimator
+
 if ! go build -o ess_comprestimator .; then
   echo "ERROR: go build failed"
   exit 1
