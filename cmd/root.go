@@ -199,6 +199,8 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
     var pre int64
     var post int64
     var successfulSamples int64
+    var failedSamples int64
+    const maxConsecutiveFailures = 10
     
     for range sample.count {
         var offset int64
@@ -225,12 +227,17 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelBalanced)
         if err != nil {
             // Skip this sample if compression fails
+            failedSamples++
+            if failedSamples >= maxConsecutiveFailures {
+                break
+            }
             continue
         }
         
         pre += int64(n)
         post += int64(len(compressed))
         successfulSamples++
+        failedSamples = 0
     }
     
     // Return results if we successfully compressed at least one sample
