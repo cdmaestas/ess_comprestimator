@@ -9,12 +9,18 @@ import os
 from pathlib import Path
 
 # Absolute path to the compiled Go binary.
-# Defaults to ./ess_comprestimator (repo root) so plain `uvicorn backend.main:app`
-# from the repo root just works during development.
-COMPRESTIMATOR_PATH: str = os.environ.get(
-    "COMPRESTIMATOR_PATH",
-    str(Path(__file__).resolve().parents[2] / "ess_comprestimator"),
-)
+# In packaged app: set by Electron via COMPRESTIMATOR_PATH env var
+# In development: defaults to ./ess_comprestimator (repo root)
+def _get_comprestimator_path() -> str:
+    # First check environment variable (set by Electron in packaged app)
+    env_path = os.environ.get("COMPRESTIMATOR_PATH")
+    if env_path:
+        return env_path
+    
+    # Development fallback: repo root
+    return str(Path(__file__).resolve().parents[2] / "ess_comprestimator")
+
+COMPRESTIMATOR_PATH: str = _get_comprestimator_path()
 
 # Base directory under which per-job temp directories are created.
 RESULTS_BASE_DIR: str = os.environ.get(
