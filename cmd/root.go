@@ -405,7 +405,7 @@ func runComprestimator(cmd *cobra.Command) {
     if cfg.errorLog != "" {
         errorFile, err = os.Create(cfg.errorLog)
         if err != nil {
-            fmt.Printf("Warning: Could not create error log file: %v\n", err)
+            fmt.Fprintf(os.Stderr, "Warning: Could not create error log file: %v\n", err)
         } else {
             defer errorFile.Close()
             errorLogger = log.New(errorFile, "", log.LstdFlags)
