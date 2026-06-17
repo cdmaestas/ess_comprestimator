@@ -190,7 +190,6 @@ export default function JobDetailPage() {
 
           {/* Optional flags */}
           {jobState.request.skip_hidden && <Tag type="outline" size="sm">Skip hidden</Tag>}
-          {jobState.request.skip_nested_directories && <Tag type="outline" size="sm">Top-level only</Tag>}
           {(jobState.request.exclude ?? []).length > 0 && (
             <Tag type="outline" size="sm">
               {jobState.request.exclude!.length} exclusion{jobState.request.exclude!.length !== 1 ? 's' : ''}
