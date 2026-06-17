@@ -12,6 +12,7 @@ Modified for ESS by _Sarvesh Chezhian_.
 - [Installation](#installation)
 - [Using the app](#using-the-app)
 - [Understanding the results](#understanding-the-results)
+- [Security](#security)
 - [Building from source](#building-from-source)
 - [Command-line interface](#command-line-interface)
 - [Development](#development)
@@ -89,6 +90,29 @@ After install, launch **Comprestimator** from your application menu, or run `com
 - **Estimated Compression Ratio** — e.g. `3.5x` means data compresses to ~28% of its original size.
 - **FCM4 drive cap** — FCM4 drives are physically limited to 4x compression. If the estimate exceeds 4x, use 4x when provisioning vdisksets.
 - **Sampling accuracy** — the default 10% sample gives good accuracy for most workloads, especially for directories with uniform file types or directories larger than 1 GB. For very large directories (100 TB+) even 1% sampling provides reliable results.
+
+---
+
+## Security
+
+The backend API enforces the following controls:
+
+### Path confinement
+
+The analysis path is resolved to its real absolute path (symlinks followed) and then checked against an allowlist of user-owned locations before the binary is invoked:
+
+| Allowed root | Purpose |
+|---|---|
+| `~` (home directory) | Primary user data |
+| `/Volumes/*` (macOS) | External and network drives |
+| `/media/*`, `/mnt/*` (Linux) | Mounted drives |
+| `/tmp`, `/private/tmp` | Temporary files |
+
+Requests targeting paths outside these roots (e.g. `/etc`, `/usr`, `/root`) are rejected with HTTP 403. This prevents another local process or a malicious `localhost` request from probing sensitive system paths.
+
+### API response filtering
+
+Internal fields such as the subprocess PID are stripped from all API responses and never exposed to the caller.
 
 ---
 
