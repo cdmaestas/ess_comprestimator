@@ -1,14 +1,13 @@
 /**
- * JobConfigForm — maps every run_comprestimator.py CLI flag to a Carbon input.
+ * JobConfigForm — maps ess_comprestimator v2 CLI flags to Carbon inputs.
  *
  * CLI flag → Carbon component
  * ─────────────────────────────────────────────────────────────────────────
- * --path                   TextInput (required)
- * --exhaustive-sampling  } RadioButtonGroup — "auto" | "exhaustive" | "percentage"
- * --sampling-percentage  }   + conditional Slider (0.1 – 100 %)
- * --exclude                Tag-pill input (TextInput + dismissible Tag)
- * --skip-nested-directories  Toggle
- * --skip-hidden              Toggle
+ * --path                 TextInput (required)
+ * --exhaustive-sample  } RadioButtonGroup — "auto" | "exhaustive" | "percentage"
+ * --sampling-percentage}   + conditional Slider (1 – 100)
+ * --exclude              Tag-pill input (TextInput + dismissible Tag)
+ * --exclude-hidden       Toggle
  */
 
 import { useState, type KeyboardEvent } from 'react'
@@ -24,8 +23,6 @@ import {
   TextInput,
   Toggle,
   Stack,
-  Grid,
-  Column,
   InlineLoading,
 } from '@carbon/react'
 import { FolderOpen, Play } from '@carbon/icons-react'
@@ -43,7 +40,6 @@ interface FormState {
   samplingPercentage: number
   excludeInput: string
   excludePatterns: string[]
-  skipNestedDirectories: boolean
   skipHidden: boolean
 }
 
@@ -58,7 +54,6 @@ const DEFAULT: FormState = {
   samplingPercentage: 10,
   excludeInput: '',
   excludePatterns: [],
-  skipNestedDirectories: false,
   skipHidden: false,
 }
 
@@ -127,7 +122,6 @@ export default function JobConfigForm({ onJobCreated }: Props) {
       sampling_percentage:
         form.samplingMode === 'percentage' ? form.samplingPercentage : null,
       exclude: form.excludePatterns,
-      skip_nested_directories: form.skipNestedDirectories,
       skip_hidden: form.skipHidden,
     }
 
@@ -275,30 +269,15 @@ export default function JobConfigForm({ onJobCreated }: Props) {
         </FormGroup>
 
         {/* ── Toggles ───────────────────────────────────────────────── */}
-        <Grid condensed>
-          <Column sm={4} md={4} lg={8}>
-            <Toggle
-              id="skip-hidden"
-              labelText="Skip hidden files"
-              labelA="Off"
-              labelB="On"
-              toggled={form.skipHidden}
-              onToggle={(checked) => set('skipHidden', checked)}
-              disabled={submitting}
-            />
-          </Column>
-          <Column sm={4} md={4} lg={8}>
-            <Toggle
-              id="skip-nested"
-              labelText="Skip nested directories"
-              labelA="Off"
-              labelB="On"
-              toggled={form.skipNestedDirectories}
-              onToggle={(checked) => set('skipNestedDirectories', checked)}
-              disabled={submitting}
-            />
-          </Column>
-        </Grid>
+        <Toggle
+          id="skip-hidden"
+          labelText="Skip hidden files"
+          labelA="Off"
+          labelB="On"
+          toggled={form.skipHidden}
+          onToggle={(checked) => set('skipHidden', checked)}
+          disabled={submitting}
+        />
 
         {/* ── Submit ────────────────────────────────────────────────── */}
         {submitting ? (

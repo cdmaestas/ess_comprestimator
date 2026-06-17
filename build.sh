@@ -48,26 +48,26 @@ case "$HOST_OS" in
 esac
 echo "Platform: $HOST_OS → building $PLATFORM package"
 
-# ── Step 1: Compile the C binary ──────────────────────────────────────────────
-echo "==> [1/5]  Compile comprestimator C binary"
-if [[ -f comprestimator.c ]]; then
-  if make --quiet 2>/dev/null; then
-    echo "    Built: $ROOT/comprestimator"
+# ── Step 1: Build the Go binary ───────────────────────────────────────────────
+echo "==> [1/5]  Build ess_comprestimator Go binary"
+if command -v go &>/dev/null; then
+  if go build -o ess_comprestimator . 2>/dev/null; then
+    echo "    Built: $ROOT/ess_comprestimator"
   else
-    echo "    WARN: make failed — binary will not be bundled."
+    echo "    WARN: go build failed — binary will not be bundled."
     echo "          The app will start but jobs will report 'binary not found'."
   fi
 else
-  echo "    WARN: comprestimator.c not found — skipping make."
+  echo "    WARN: go not found on PATH — skipping build."
 fi
 
 # electron-builder fails if a file listed in extraResources is missing.
 # Create an executable stub so packaging always succeeds even without the binary.
-if [[ ! -f comprestimator ]]; then
-  printf '#!/bin/sh\necho "comprestimator: real binary not bundled — set COMPRESTIMATOR_PATH." >&2\nexit 1\n' \
-    > comprestimator
-  chmod +x comprestimator
-  echo "    Created stub comprestimator placeholder for packaging."
+if [[ ! -f ess_comprestimator ]]; then
+  printf '#!/bin/sh\necho "ess_comprestimator: real binary not bundled — set COMPRESTIMATOR_PATH." >&2\nexit 1\n' \
+    > ess_comprestimator
+  chmod +x ess_comprestimator
+  echo "    Created stub ess_comprestimator placeholder for packaging."
 fi
 
 # ── Step 2: Build the React frontend ─────────────────────────────────────────

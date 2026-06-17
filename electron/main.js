@@ -29,9 +29,9 @@ function backendBinPath() {
 
 function comprestimatorBinPath() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'comprestimator')
+    return path.join(process.resourcesPath, 'ess_comprestimator')
   }
-  return path.join(__dirname, '..', 'comprestimator')
+  return path.join(__dirname, '..', 'ess_comprestimator')
 }
 
 // ── Backend process ────────────────────────────────────────────────────────────

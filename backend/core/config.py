@@ -8,12 +8,12 @@ Override any value at runtime via environment or a .env file:
 import os
 from pathlib import Path
 
-# Absolute path to the compiled C binary.
-# Defaults to ./comprestimator (repo root) so plain `uvicorn backend.main:app`
+# Absolute path to the compiled Go binary.
+# Defaults to ./ess_comprestimator (repo root) so plain `uvicorn backend.main:app`
 # from the repo root just works during development.
 COMPRESTIMATOR_PATH: str = os.environ.get(
     "COMPRESTIMATOR_PATH",
-    str(Path(__file__).resolve().parents[2] / "comprestimator"),
+    str(Path(__file__).resolve().parents[2] / "ess_comprestimator"),
 )
 
 # Base directory under which per-job temp directories are created.
