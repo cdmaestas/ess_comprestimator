@@ -198,6 +198,8 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
 
     var pre int64
     var post int64
+    var successfulSamples int64
+    
     for range sample.count {
         var offset int64
         if sample.size - SAMPLE_LEN > 0 {
@@ -209,28 +211,34 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         // Seek to a random point
         _, err = file.Seek(offset, 0)
         if err != nil {
-            return 0, 0, 0, err
+            continue
         }
 
         // Read a sample from the random point
         buffer := make([]byte, SAMPLE_LEN)
         n, err := file.Read(buffer)
         if err != nil {
-            return 0, 0, 0, err
+            continue
         }
 
         // Compress the sample (use only bytes actually read)
-        pre += int64(n)
         compressed, err := minlz.Encode(nil, buffer[:n], minlz.LevelBalanced)
         if err != nil {
-            // Skip this sample if compression fails, don't fail entire operation
+            // Skip this sample if compression fails
             continue
         }
+        
+        pre += int64(n)
         post += int64(len(compressed))
-
+        successfulSamples++
     }
     
-    return pre, post, sample.count, err
+    // Return results if we successfully compressed at least one sample
+    if successfulSamples > 0 {
+        return pre, post, successfulSamples, nil
+    }
+    
+    return 0, 0, 0, errors.New("no samples could be compressed")
 }
 
 
