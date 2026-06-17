@@ -414,7 +414,16 @@ func runComprestimator(cmd *cobra.Command) {
     if cfg.errorLog != "" {
         errorFile, err = os.Create(cfg.errorLog)
         if err != nil {
-            fmt.Fprintf(os.Stderr, "Warning: Could not create error log file: %v\n", err)
+            // Try temp directory as fallback
+            tempLog := filepath.Join(os.TempDir(), "comprestimator_errors.log")
+            errorFile, err = os.Create(tempLog)
+            if err != nil {
+                fmt.Fprintf(os.Stderr, "Note: Error logging disabled (filesystem is read-only)\n")
+            } else {
+                defer errorFile.Close()
+                errorLogger = log.New(errorFile, "", log.LstdFlags)
+                fmt.Fprintf(os.Stderr, "Note: Error log created at %s\n", tempLog)
+            }
         } else {
             defer errorFile.Close()
             errorLogger = log.New(errorFile, "", log.LstdFlags)
