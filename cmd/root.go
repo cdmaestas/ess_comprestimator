@@ -179,7 +179,7 @@ func buildSampler(root string, errorLogger *log.Logger, excludePatterns []string
         fmt.Fprintf(os.Stderr, "\nWarning: %.2f%% of the files in the directory were not read. See error log for details.", filesSkippedRatio*100)
     }
     if err != nil {
-        fmt.Printf("Error walking the path %q: %v\n", root, err)
+        fmt.Fprintf(os.Stderr, "Error walking the path %q: %v\n", root, err)
     }
 
     chooser, err := wr.NewChooser(population...)
