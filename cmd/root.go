@@ -224,11 +224,19 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         }
 
         // Compress the sample (use only bytes actually read)
-        // Use TryEncode which returns nil on error instead of panicking
-        compressed := minlz.TryEncode(nil, buffer[:n], minlz.LevelSuperFast)
+        // Wrap in recover to catch any panics from minlz
+        var compressed []byte
+        func() {
+            defer func() {
+                if r := recover(); r != nil {
+                    compressed = nil
+                }
+            }()
+            compressed = minlz.TryEncode(nil, buffer[:n], minlz.LevelSuperFast)
+        }()
         
         if compressed == nil {
-            // Skip this sample if compression fails
+            // Skip this sample if compression fails or panics
             failedSamples++
             if failedSamples >= maxConsecutiveFailures {
                 break
