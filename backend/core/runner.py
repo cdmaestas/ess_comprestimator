@@ -137,6 +137,9 @@ async def run_job(job_id: str) -> None:
                         line = raw_line.decode(errors="replace").rstrip("\r\n")
                         if "\r" in line:
                             line = line.split("\r")[-1].strip()
+                        # Filter out minlz error messages from stdout
+                        if "Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]"):
+                            continue
                         if line:
                             await registry.push_log(job_id, line)
                             output_lines.append(line)
@@ -144,10 +147,11 @@ async def run_job(job_id: str) -> None:
                 async def read_stderr():
                     async for raw_line in proc.stderr:
                         line = raw_line.decode(errors="replace").rstrip("\r\n")
-                        # Filter out minlz library errors
-                        if "Separator is not found" not in line and "chunk exceed" not in line:
-                            if line and not line.startswith("[ERROR]"):
-                                await registry.push_log(job_id, f"[STDERR] {line}")
+                        # Filter out minlz library errors - skip any line containing these phrases
+                        if "Separator is not found" in line or "chunk exceed" in line or "[ERROR]" in line:
+                            continue
+                        if line:
+                            await registry.push_log(job_id, f"[STDERR] {line}")
                 
                 await asyncio.gather(read_stdout(), read_stderr())
                 await proc.wait()
