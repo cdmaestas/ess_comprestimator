@@ -82,7 +82,7 @@ type compressResult struct {
     samplesProcessed int64
 }
 
-const SAMPLE_LEN = 8192
+const SAMPLE_LEN = 4096
 const DEFAULT_SAMPLES_PER_BUFFER = 16384
 const DEFAULT_SAMPLE_RATIO = .1
 const PROGRESS_UPDATE_INTERVAL = 100_000
