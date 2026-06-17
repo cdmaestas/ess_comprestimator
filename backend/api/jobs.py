@@ -63,6 +63,28 @@ def _validate_request(req: JobRequest) -> None:
             detail="Path must point to a regular file or directory",
         )
 
+    # Confine analysis to directories the local user owns or that are explicitly
+    # intended for user data. This prevents another local process or a malicious
+    # localhost request from probing sensitive system paths like /etc or /root.
+    import pathlib as _pl
+    _allowed = [_pl.Path.home()]
+    for _extra in ("/Volumes", "/media", "/mnt", "/tmp", "/private/tmp"):
+        _p = _pl.Path(_extra)
+        if _p.exists():
+            _allowed.append(_p)
+
+    real_str = str(real)
+    if not any(real_str == str(root) or real_str.startswith(str(root) + "/")
+               for root in _allowed):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Path is outside the allowed analysis roots "
+                "(home directory, /Volumes, /media, /mnt, /tmp). "
+                "Only user-owned locations may be analysed."
+            ),
+        )
+
     req.path = str(real)
 
 
@@ -114,7 +136,7 @@ async def list_jobs() -> List[JobSummary]:
     ]
 
 
-@router.get("/{job_id}", response_model=JobState)
+@router.get("/{job_id}", response_model=JobState, response_model_exclude={"pid"})
 async def get_job(job_id: str) -> JobState:
     """Return full job state including all captured log lines."""
     return await _get_or_404(job_id)
