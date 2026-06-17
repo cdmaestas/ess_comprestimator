@@ -176,7 +176,7 @@ func buildSampler(root string, errorLogger *log.Logger, excludePatterns []string
     
     filesSkippedRatio := float64(filesSkipped) / float64(filesProcessed+filesSkipped)
     if filesSkippedRatio >= 1 {
-        fmt.Printf("\nWarning: %.2f%% of the files in the directory were not read. See error log for details.", filesSkippedRatio*100)
+        fmt.Fprintf(os.Stderr, "\nWarning: %.2f%% of the files in the directory were not read. See error log for details.", filesSkippedRatio*100)
     }
     if err != nil {
         fmt.Printf("Error walking the path %q: %v\n", root, err)
