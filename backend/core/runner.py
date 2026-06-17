@@ -118,7 +118,7 @@ async def run_job(job_id: str) -> None:
                 proc = await asyncio.create_subprocess_exec(
                     *cli_args,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,  # suppress stderr to hide minlz library errors
+                    stderr=asyncio.subprocess.PIPE,  # capture stderr separately to filter errors
                 )
 
                 # Store handle + PID so DELETE /api/jobs/{id} can cancel it.
@@ -129,16 +129,27 @@ async def run_job(job_id: str) -> None:
                 # ── Stream output line-by-line ─────────────────────────────────
                 output_lines: list[str] = []
                 assert proc.stdout is not None
-                async for raw_line in proc.stdout:
-                    line = raw_line.decode(errors="replace").rstrip("\r\n")
-                    # The Go binary uses \r for in-place progress updates;
-                    # keep only the last "frame" so the log shows clean lines.
-                    if "\r" in line:
-                        line = line.split("\r")[-1].strip()
-                    if line:
-                        await registry.push_log(job_id, line)
-                        output_lines.append(line)
-
+                assert proc.stderr is not None
+                
+                # Read stdout and stderr concurrently
+                async def read_stdout():
+                    async for raw_line in proc.stdout:
+                        line = raw_line.decode(errors="replace").rstrip("\r\n")
+                        if "\r" in line:
+                            line = line.split("\r")[-1].strip()
+                        if line:
+                            await registry.push_log(job_id, line)
+                            output_lines.append(line)
+                
+                async def read_stderr():
+                    async for raw_line in proc.stderr:
+                        line = raw_line.decode(errors="replace").rstrip("\r\n")
+                        # Filter out minlz library errors
+                        if "Separator is not found" not in line and "chunk exceed" not in line:
+                            if line and not line.startswith("[ERROR]"):
+                                await registry.push_log(job_id, f"[STDERR] {line}")
+                
+                await asyncio.gather(read_stdout(), read_stderr())
                 await proc.wait()
                 registry.deregister_proc(job_id)
                 state.pid = None
