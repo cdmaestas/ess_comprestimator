@@ -6,7 +6,6 @@ import (
     "math/rand"
     "sync"
     "math"
-    "syscall"
     "github.com/spf13/cobra"
     "github.com/minio/minlz"
     wr "github.com/mroth/weightedrand"
@@ -196,16 +195,6 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
         return 0, 0, 0, err
     }
     defer file.Close()
-
-    // Redirect stderr for entire compression loop (minlz writes errors to stderr)
-    devNull, _ := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
-    oldStderr, _ := syscall.Dup(2)
-    syscall.Dup2(int(devNull.Fd()), 2)
-    defer func() {
-        syscall.Dup2(oldStderr, 2)
-        syscall.Close(oldStderr)
-        devNull.Close()
-    }()
 
     var pre int64
     var post int64
