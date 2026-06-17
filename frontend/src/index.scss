@@ -1,0 +1,90 @@
+// Import all Carbon styles.
+// Carbon v11 uses @use internally; the quietDeps option in vite.config.ts
+// silences the resulting deprecation warnings from upstream packages.
+@use '@carbon/react';
+
+// Global resets that Carbon doesn't handle
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; // no page-level scroll in the Electron window
+}
+
+// Carbon's Content adds padding-top: 3rem for the fixed header.
+// Lock it to the remaining viewport height. overflow-y: auto lets pages like
+// JobDetailPage scroll when their content is taller than the viewport, while
+// HomePage (which uses full-height columns with their own scroll) stays static.
+.cds--content {
+  margin-top: 3rem;            /* position below fixed header so scroll never hides content behind it */
+  padding-top: 0 !important;  /* override Carbon's default padding-top (which served the same purpose) */
+  height: calc(100vh - 3rem);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+// Carbon DataTable container defaults to overflow-x: auto, creating a
+// horizontal scrollbar even when the content only barely overflows.
+// The app has a 960px minimum width so horizontal scroll is never needed.
+.cds--data-table-container {
+  overflow-x: hidden;
+}
+
+// Scrollable log panel used in JobProgress
+.log-panel {
+  background: var(--cds-layer-01);
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 1rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+
+  // Auto-scroll target
+  .log-panel__bottom {
+    float: left;
+    clear: both;
+  }
+}
+
+// Tag input wrapper for exclude patterns
+.tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--cds-field-01);
+  border-bottom: 1px solid var(--cds-border-strong-01);
+
+  &:focus-within {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
+  }
+
+  input {
+    border: none;
+    background: transparent;
+    outline: none;
+    flex: 1;
+    min-width: 120px;
+    font-size: 0.875rem;
+    color: var(--cds-text-primary);
+
+    &::placeholder {
+      color: var(--cds-text-placeholder);
+    }
+  }
+}

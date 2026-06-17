@@ -4,6 +4,7 @@ import argparse
 import io
 import os
 import random
+import shutil
 import tempfile
 import tarfile
 import csv
@@ -12,8 +13,12 @@ from fnmatch import fnmatch
 DEFAULT_SAMPLE_FILE_SIZE = 10_000_000_000 # If weighted sampling, sets max file size of sample archive
 DEFAULT_SAMPLING_PERCENTAGE = .1
 
-COMPRESTIMATOR_PATH = "./comprestimator"
-COMPRESTIMATOR_RESULTS_PATH = "./results.csv"
+# Allow the web backend to override these paths via environment variables so
+# each job can run in its own isolated working directory.  The CLI default
+# behaviour ("./comprestimator" and "./results.csv" relative to cwd) is
+# preserved when the env vars are not set.
+COMPRESTIMATOR_PATH = os.environ.get("COMPRESTIMATOR_PATH", "./comprestimator")
+COMPRESTIMATOR_RESULTS_PATH = os.environ.get("COMPRESTIMATOR_RESULTS_PATH", "./results.csv")
 
 KNOWN_COMPRESSED_FILE_SUFFIXES = [".png", ".jpg", ".jpeg", ".gif", ".mp3", ".mp4", ".docx", ".xlsx", ".zip", ".rar", ".bz", ".gz"]
 
@@ -77,6 +82,10 @@ class Sampler():
                     space_remaining = self.max_file_size - current_size
                     fair_space_allocation = int(size * sampling_ratio)
                     if size > space_remaining or (size > 0.1*self.max_file_size and size > fair_space_allocation):
+                        if fair_space_allocation <= 0:
+                            # allocation rounds to zero — skip this file entirely
+                            entry_to_remove = entry
+                            break
                         sampling_list.append([file, fair_space_allocation, size])
                         total_dir_size -= (size - fair_space_allocation)
                         size = fair_space_allocation
@@ -139,7 +148,7 @@ def file_comprestimator(input_path: str):
     if not comprestimator_exists:
         raise FileNotFoundError(f"""Comprestimator executable not found  at {COMPRESTIMATOR_PATH}.  
                                     Make sure you are running this python file from same directory as the comprestimator executable (and that you have compiled the executable with 'make')""")
-    _ = subprocess.run(["./comprestimator", "-d", input_path, "-r", COMPRESTIMATOR_RESULTS_PATH], check=True)
+    _ = subprocess.run([COMPRESTIMATOR_PATH, "-d", input_path, "-r", COMPRESTIMATOR_RESULTS_PATH], check=True)
     print(f"Comprestimator ran successfully, wrote results to {COMPRESTIMATOR_RESULTS_PATH}")
 
 
@@ -186,6 +195,45 @@ def get_partial_file(file_entry):
 
     return tarinfo, data_buffer
 
+def _pick_archive_dir(src_dir: str, sample_size: int) -> str:
+    """
+    Return the directory in which to create the temp archive.
+
+    Prefer the parent of src_dir so the archive lands on the same filesystem
+    as the source — this avoids exhausting the system drive when the source
+    lives on a large external volume.  Falls back to the job work-dir (cwd)
+    if the parent isn't writable.  Raises OSError if neither location has
+    enough free space.
+    """
+    candidates = [
+        (os.path.dirname(os.path.abspath(src_dir)), "source volume"),
+        (os.getcwd(),                                "system temp"),
+    ]
+    for dir_path, label in candidates:
+        try:
+            free = shutil.disk_usage(dir_path).free
+            if free < sample_size:
+                print(
+                    f"Note: {label} ({dir_path}) has only {free:,} bytes free; "
+                    f"archive needs ~{sample_size:,} bytes — trying next option"
+                )
+                continue
+            # Verify write access with a throwaway probe file.
+            probe = tempfile.NamedTemporaryFile(delete=True, dir=dir_path)
+            probe.close()
+            print(f"Creating archive on {label} ({dir_path})")
+            return dir_path
+        except (OSError, PermissionError):
+            continue
+
+    raise OSError(
+        f"Not enough disk space to create the sample archive "
+        f"(~{sample_size:,} bytes needed).\n"
+        f"Free up space on the source volume or the system drive, "
+        f"or reduce the sampling percentage."
+    )
+
+
 def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AUTO, sampling_percentage=None, skip_nested_directories=False, excluded_patterns=[], skip_hidden=False) -> str:
     """
     Given a directory path, randomly samples files and creates a tar archive from them, and then runs comprestimator on the archive
@@ -216,7 +264,8 @@ def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AU
         raise Exception("Directory is empty or all files are empty!")
     print(f"Directory has {len(files_with_sizes)} files totalling {total_size} bytes. Sampling files to create archive file...")
     if total_size < 1_000_000:
-        raise Exception("Error: Directory is < 1 MB in size. For accurate results, more data is required")
+        messages.append("Note: Directory is too small for sampling — running exhaustive analysis instead.")
+        sampling_strategy = SamplingStrategy.EXHAUSTIVE
 
     # create list of files to archive
     sample_size = DEFAULT_SAMPLE_FILE_SIZE
@@ -225,7 +274,7 @@ def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AU
     elif sampling_percentage is not None: # provided sampling percentage, so sample that much
         sample_size = int(sampling_percentage * total_size)
     else: # not exhaustive, no percentage provided (default behavior to sample 10%)
-        sample_size = max(DEFAULT_SAMPLE_FILE_SIZE, int(DEFAULT_SAMPLING_PERCENTAGE * total_size))
+        sample_size = min(DEFAULT_SAMPLE_FILE_SIZE, int(DEFAULT_SAMPLING_PERCENTAGE * total_size))
     
     print(f"Sampling up to {sample_size} bytes from directory")
 
@@ -234,8 +283,8 @@ def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AU
 
     print("Creating archive for comprestimator input...")
 
-    current_dir = os.getcwd()
-    temp_file = tempfile.NamedTemporaryFile(delete=False, prefix="tmp_", dir=current_dir)
+    archive_dir = _pick_archive_dir(src_dir, sample_size)
+    temp_file = tempfile.NamedTemporaryFile(delete=False, prefix=".tmp_comprestimator_", dir=archive_dir)
     files_added = 0
     try:
         print("Creating temporary file for archive at", temp_file.name, "...")
@@ -253,6 +302,11 @@ def directory_comprestimator(src_dir: str, sampling_strategy=SamplingStrategy.AU
                     files_added +=1
                 except PermissionError:
                     print(f"Could not access {file_entry} due to insufficient permissions. Skipping...")
+                except OSError as e:
+                    # File may have changed size between stat and read (e.g. active
+                    # .git/objects/pack files), or another transient I/O error.
+                    name = file_entry[0] if isinstance(file_entry, list) else file_entry
+                    print(f"Skipping {name}: {e}")
 
         print("Running comprestimator on archive...")
 
