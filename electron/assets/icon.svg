@@ -12,28 +12,30 @@
   <!-- Compression clamp squeezing ESS text -->
   <g transform="translate(256, 256)">
     <!-- Left clamp jaw -->
-    <rect x="-150" y="-80" width="25" height="160" rx="5" fill="#ffffff" opacity="0.95"/>
-    <rect x="-150" y="-100" width="80" height="20" rx="5" fill="#ffffff" opacity="0.95"/>
+    <rect x="-180" y="-100" width="25" height="200" rx="5" fill="#ffffff" opacity="0.95"/>
+    <rect x="-180" y="-120" width="90" height="20" rx="5" fill="#ffffff" opacity="0.95"/>
     
-    <!-- Right clamp jaw (closer to show compression) -->
-    <rect x="125" y="-80" width="25" height="160" rx="5" fill="#ffffff" opacity="0.95"/>
-    <rect x="70" y="-100" width="80" height="20" rx="5" fill="#ffffff" opacity="0.95"/>
+    <!-- Right clamp jaw -->
+    <rect x="155" y="-100" width="25" height="200" rx="5" fill="#ffffff" opacity="0.95"/>
+    <rect x="90" y="-120" width="90" height="20" rx="5" fill="#ffffff" opacity="0.95"/>
     
     <!-- Screw mechanism -->
-    <line x1="105" y1="-90" x2="105" y2="90" stroke="#42be65" stroke-width="6"/>
-    <circle cx="105" cy="-90" r="12" fill="#42be65"/>
-    <circle cx="105" cy="90" r="12" fill="#42be65"/>
+    <line x1="125" y1="-110" x2="125" y2="110" stroke="#42be65" stroke-width="6"/>
+    <circle cx="125" cy="-110" r="12" fill="#42be65"/>
+    <circle cx="125" cy="110" r="12" fill="#42be65"/>
     
-    <!-- ESS text - slightly condensed to show compression effect -->
-    <text x="0" y="25" text-anchor="middle" fill="#ffffff" font-size="110" font-weight="bold" font-family="IBM Plex Sans, Arial, sans-serif" letter-spacing="-8">ESS</text>
+    <!-- ESS text - fills circle top to bottom, horizontally compressed, green color, moved down -->
+    <g transform="scale(0.5, 2.0)">
+      <text x="0" y="50" text-anchor="middle" fill="#42be65" font-size="220" font-weight="900" font-family="IBM Plex Sans, Arial, sans-serif" letter-spacing="-8">ESS</text>
+    </g>
     
-    <!-- Compression lines (showing squeeze effect) -->
-    <line x1="-120" y1="-60" x2="-90" y2="-60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
-    <line x1="-120" y1="0" x2="-90" y2="0" stroke="#42be65" stroke-width="3" opacity="0.6"/>
-    <line x1="-120" y1="60" x2="-90" y2="60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <!-- Compression lines -->
+    <line x1="-150" y1="-70" x2="-110" y2="-70" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="-150" y1="0" x2="-110" y2="0" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="-150" y1="70" x2="-110" y2="70" stroke="#42be65" stroke-width="3" opacity="0.6"/>
     
-    <line x1="90" y1="-60" x2="120" y2="-60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
-    <line x1="90" y1="0" x2="120" y2="0" stroke="#42be65" stroke-width="3" opacity="0.6"/>
-    <line x1="90" y1="60" x2="120" y2="60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="110" y1="-70" x2="150" y2="-70" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="110" y1="0" x2="150" y2="0" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="110" y1="70" x2="150" y2="70" stroke="#42be65" stroke-width="3" opacity="0.6"/>
   </g>
 </svg>
