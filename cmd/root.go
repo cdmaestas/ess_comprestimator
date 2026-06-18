@@ -77,12 +77,13 @@ type fileInfo struct {
 }
 
 type compressResult struct {
-    preCompress int64
-    postCompress int64
+    preCompress      int64
+    postCompress     int64
     samplesProcessed int64
+    skippedBytes     int64
 }
 
-const SAMPLE_LEN = 4096
+const SAMPLE_LEN = 16384
 const DEFAULT_SAMPLES_PER_BUFFER = 16384
 const DEFAULT_SAMPLE_RATIO = .1
 const PROGRESS_UPDATE_INTERVAL = 100_000
@@ -176,10 +177,10 @@ func buildSampler(root string, errorLogger *log.Logger, excludePatterns []string
     
     filesSkippedRatio := float64(filesSkipped) / float64(filesProcessed+filesSkipped)
     if filesSkippedRatio >= 1 {
-        fmt.Fprintf(os.Stderr, "\nWarning: %.2f%% of the files in the directory were not read. See error log for details.", filesSkippedRatio*100)
+        fmt.Printf("\nWarning: %.2f%% of the files in the directory were not read. See error log for details.", filesSkippedRatio*100)
     }
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Error walking the path %q: %v\n", root, err)
+        fmt.Printf("Error walking the path %q: %v\n", root, err)
     }
 
     chooser, err := wr.NewChooser(population...)
@@ -189,19 +190,16 @@ func buildSampler(root string, errorLogger *log.Logger, excludePatterns []string
 // Given a file_info object, take file_info.read_count random samples from
 // the file (of size SAMPLE_LEN) and compress them, returning the pre and post
 // compressed sizes
-func compressSample(sample fileInfo) (int64, int64, int64, error) {
+func compressSample(sample fileInfo) (int64, int64, int64, int64, error) {
     file, err := os.Open(sample.path)
     if err != nil {
-        return 0, 0, 0, err
+        return 0, 0, 0, 0, err
     }
     defer file.Close()
 
     var pre int64
     var post int64
-    var successfulSamples int64
-    var failedSamples int64
-    const maxConsecutiveFailures = 10
-    
+    var skipped int64
     for range sample.count {
         var offset int64
         if sample.size - SAMPLE_LEN > 0 {
@@ -210,52 +208,30 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
             offset = 0
         }
 
-        // Seek to a random point
         _, err = file.Seek(offset, 0)
         if err != nil {
-            continue
+            return 0, 0, 0, 0, err
         }
 
-        // Read a sample from the random point
         buffer := make([]byte, SAMPLE_LEN)
         n, err := file.Read(buffer)
         if err != nil {
-            continue
+            return 0, 0, 0, 0, err
         }
 
-        // Compress the sample (use only bytes actually read)
-        // Wrap in recover to catch any panics from minlz
-        var compressed []byte
-        func() {
-            defer func() {
-                if r := recover(); r != nil {
-                    compressed = nil
-                }
-            }()
-            compressed = minlz.TryEncode(nil, buffer[:n], minlz.LevelSuperFast)
-        }()
-        
+        // TryEncode returns nil for incompressible data (e.g. already-compressed
+        // or encrypted files). Track those bytes separately so we can report
+        // how much of the sampled data was skipped.
+        compressed := minlz.TryEncode(nil, buffer[:n], minlz.LevelSuperFast)
         if compressed == nil {
-            // Skip this sample if compression fails or panics
-            failedSamples++
-            if failedSamples >= maxConsecutiveFailures {
-                break
-            }
+            skipped += int64(n)
             continue
         }
-        
         pre += int64(n)
         post += int64(len(compressed))
-        successfulSamples++
-        failedSamples = 0
     }
-    
-    // Return results if we successfully compressed at least one sample
-    if successfulSamples > 0 {
-        return pre, post, successfulSamples, nil
-    }
-    
-    return 0, 0, 0, errors.New("no samples could be compressed")
+
+    return pre, post, sample.count, skipped, err
 }
 
 
@@ -273,14 +249,14 @@ func compressorWorker(jobs <-chan fileInfo, intermediateResults chan<- compressR
         if !more {
             return
         }
-        pre, post, samplesProcessed, err := compressSample(job)
+        pre, post, samplesProcessed, skipped, err := compressSample(job)
         if err != nil {
             if errorLogger != nil {
                 errorLogger.Printf("Failed to compress: %s: %v", job.path, err)
             }
             continue
         }
-        intermediateResults <- compressResult{pre, post, samplesProcessed}
+        intermediateResults <- compressResult{pre, post, samplesProcessed, skipped}
     }
 }
 
@@ -290,17 +266,19 @@ func accumulateResults(intermediateResults <-chan compressResult, finalResult ch
     var totalPre int64
     var totalPost int64
     var totalSamples int64
+    var totalSkipped int64
     startTime := time.Now().UnixMilli()
     for {
         result, more := <-intermediateResults
         if !more {
-            finalResult <- compressResult{totalPre, totalPost, totalSamples}
+            finalResult <- compressResult{totalPre, totalPost, totalSamples, totalSkipped}
             return
         }
 
         totalPre += result.preCompress
         totalPost += result.postCompress
         totalSamples += result.samplesProcessed
+        totalSkipped += result.skippedBytes
 
         nowTime := time.Now().UnixMilli()
 
@@ -410,6 +388,13 @@ func displayResults(res compressResult) {
     fmt.Printf("Pre-compression size: %v\nPost-compression size: %v\n\n",
         prettyBytes(res.preCompress), prettyBytes(res.postCompress))
 
+    if res.skippedBytes > 0 {
+        totalSampled := res.preCompress + res.skippedBytes
+        skippedPct := 100.0 * float64(res.skippedBytes) / float64(totalSampled)
+        fmt.Printf("Note: %v of sampled data (%.1f%%) could not be compressed and was excluded from the estimate — likely already-compressed or encrypted files (e.g. .zip, .jpg, .mp4).\n",
+            prettyBytes(res.skippedBytes), skippedPct)
+    }
+
     if ratio > FCM4_MAX_COMPRESSION_RATIO {
         fmt.Println("Note: FCM4 drives are limited to 4x physical space. Use a compression ratio of 4x when provisioning vdisksets")
     }
@@ -431,16 +416,7 @@ func runComprestimator(cmd *cobra.Command) {
     if cfg.errorLog != "" {
         errorFile, err = os.Create(cfg.errorLog)
         if err != nil {
-            // Try temp directory as fallback
-            tempLog := filepath.Join(os.TempDir(), "comprestimator_errors.log")
-            errorFile, err = os.Create(tempLog)
-            if err != nil {
-                fmt.Fprintf(os.Stderr, "Note: Error logging disabled (filesystem is read-only)\n")
-            } else {
-                defer errorFile.Close()
-                errorLogger = log.New(errorFile, "", log.LstdFlags)
-                fmt.Fprintf(os.Stderr, "Note: Error log created at %s\n", tempLog)
-            }
+            fmt.Printf("Warning: Could not create error log file: %v\n", err)
         } else {
             defer errorFile.Close()
             errorLogger = log.New(errorFile, "", log.LstdFlags)

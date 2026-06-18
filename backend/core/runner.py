@@ -121,9 +121,8 @@ async def run_job(job_id: str) -> None:
                     stderr=asyncio.subprocess.PIPE,  # capture stderr separately to filter errors
                 )
 
-                # Store handle + PID so DELETE /api/jobs/{id} can cancel it.
+                # Store handle so DELETE /api/jobs/{id} can send SIGTERM.
                 registry.register_proc(job_id, proc)
-                state.pid = proc.pid
                 await registry.update(state)
 
                 # ── Stream output line-by-line ─────────────────────────────────
@@ -188,7 +187,6 @@ async def run_job(job_id: str) -> None:
                 await asyncio.gather(read_stdout(), read_stderr())
                 await proc.wait()
                 registry.deregister_proc(job_id)
-                state.pid = None
 
                 # Check exit status
                 if proc.returncode == -15:
@@ -253,7 +251,6 @@ async def run_job(job_id: str) -> None:
             state.status = JobStatus.FAILED
             state.completed_at = datetime.now(timezone.utc)
             registry.deregister_proc(job_id)
-            state.pid = None
             await registry.update(state)
             await registry.push_status(job_id, JobStatus.FAILED)
 

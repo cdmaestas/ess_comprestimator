@@ -136,7 +136,7 @@ async def list_jobs() -> List[JobSummary]:
     ]
 
 
-@router.get("/{job_id}", response_model=JobState, response_model_exclude={"pid"})
+@router.get("/{job_id}", response_model=JobState)
 async def get_job(job_id: str) -> JobState:
     """Return full job state including all captured log lines."""
     return await _get_or_404(job_id)
