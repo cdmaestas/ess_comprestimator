@@ -27,7 +27,6 @@ export interface JobState extends JobSummary {
   log_lines: string[]
   warnings: string[]
   error: string | null
-  pid: number | null
   result: CompressionResult | null
 }
 
@@ -48,6 +47,7 @@ export interface CompressionResult {
   after_rtc_perc: number | null
   error: number | null
   tot_time: number | null
+  skipped_bytes_mb: number | null
   interpretation: string
 }
 

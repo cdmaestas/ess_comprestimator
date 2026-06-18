@@ -90,6 +90,7 @@ After install, launch **Comprestimator** from your application menu, or run `com
 - **Estimated Compression Ratio** — e.g. `3.5x` means data compresses to ~28% of its original size.
 - **FCM4 drive cap** — FCM4 drives are physically limited to 4x compression. If the estimate exceeds 4x, use 4x when provisioning vdisksets.
 - **Sampling accuracy** — the default 10% sample gives good accuracy for most workloads, especially for directories with uniform file types or directories larger than 1 GB. For very large directories (100 TB+) even 1% sampling provides reliable results.
+- **Skipped (incompressible)** — if the results panel shows a "Skipped" row, some sampled data could not be compressed (e.g. `.zip`, `.jpg`, `.mp4`, or encrypted files). These samples are excluded from the ratio estimate, which therefore reflects only the compressible portion of your data. If a large percentage is skipped, the ratio may be optimistic for the full dataset.
 
 ---
 

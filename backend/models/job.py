@@ -44,12 +44,15 @@ class JobRequest(BaseModel):
 
     @field_validator("exclude")
     @classmethod
-    def _no_flag_like_patterns(cls, v: List[str]) -> List[str]:
+    def _validate_exclude_patterns(cls, v: List[str]) -> List[str]:
+        import re as _re
+        # Allow printable glob characters; block leading dashes (CLI flag confusion),
+        # null bytes, and newlines (argument parser injection).
+        _SAFE = _re.compile(r'^[^\x00\n\r\-][^\x00\n\r]*$')
         for pattern in v:
-            if pattern.startswith("-"):
+            if not _SAFE.match(pattern):
                 raise ValueError(
-                    f"Exclude pattern may not start with '-' (would be interpreted as a "
-                    f"CLI flag by the subprocess): {pattern!r}"
+                    f"Exclude pattern contains invalid characters or starts with '-': {pattern!r}"
                 )
         return v
     skip_hidden: bool = Field(
@@ -87,10 +90,6 @@ class JobState(BaseModel):
     # Set to True when a cancel request arrives before the subprocess starts.
     # run_job checks this after acquiring the semaphore and aborts early.
     cancelled: bool = False
-
-    # PID of the subprocess — stored so the API can send SIGTERM for cancellation.
-    # None when the job is queued or after the process exits.
-    pid: Optional[int] = None
 
     # Populated when status == COMPLETE
     result: Optional[CompressionResult] = None
