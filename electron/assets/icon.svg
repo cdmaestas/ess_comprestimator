@@ -9,33 +9,31 @@
   
   <circle cx="256" cy="256" r="240" fill="url(#bgGradient)"/>
   
-  <!-- Compression tool visual: C-clamp/vise surrounding ESS -->
+  <!-- Compression clamp squeezing ESS text -->
   <g transform="translate(256, 256)">
-    <!-- Left side of clamp -->
-    <rect x="-140" y="-100" width="30" height="200" rx="5" fill="#ffffff" opacity="0.9"/>
-    <rect x="-140" y="-120" width="100" height="20" rx="5" fill="#ffffff" opacity="0.9"/>
+    <!-- Left clamp jaw -->
+    <rect x="-150" y="-80" width="25" height="160" rx="5" fill="#ffffff" opacity="0.95"/>
+    <rect x="-150" y="-100" width="80" height="20" rx="5" fill="#ffffff" opacity="0.95"/>
     
-    <!-- Right side of clamp (screw mechanism) -->
-    <rect x="110" y="-100" width="30" height="200" rx="5" fill="#ffffff" opacity="0.9"/>
-    <rect x="40" y="-120" width="100" height="20" rx="5" fill="#ffffff" opacity="0.9"/>
+    <!-- Right clamp jaw (closer to show compression) -->
+    <rect x="125" y="-80" width="25" height="160" rx="5" fill="#ffffff" opacity="0.95"/>
+    <rect x="70" y="-100" width="80" height="20" rx="5" fill="#ffffff" opacity="0.95"/>
     
-    <!-- Screw threads (compression indicator) -->
-    <g opacity="0.7">
-      <line x1="75" y1="-80" x2="75" y2="80" stroke="#42be65" stroke-width="8"/>
-      <circle cx="75" cy="-60" r="4" fill="#42be65"/>
-      <circle cx="75" cy="-30" r="4" fill="#42be65"/>
-      <circle cx="75" cy="0" r="4" fill="#42be65"/>
-      <circle cx="75" cy="30" r="4" fill="#42be65"/>
-      <circle cx="75" cy="60" r="4" fill="#42be65"/>
-    </g>
+    <!-- Screw mechanism -->
+    <line x1="105" y1="-90" x2="105" y2="90" stroke="#42be65" stroke-width="6"/>
+    <circle cx="105" cy="-90" r="12" fill="#42be65"/>
+    <circle cx="105" cy="90" r="12" fill="#42be65"/>
     
-    <!-- ESS text in center -->
-    <text x="0" y="20" text-anchor="middle" fill="#ffffff" font-size="120" font-weight="bold" font-family="IBM Plex Sans, Arial, sans-serif">ESS</text>
-  </g>
-  
-  <!-- Compression label at bottom -->
-  <g transform="translate(256, 430)">
-    <rect x="-70" y="-18" width="140" height="36" rx="18" fill="#161616" opacity="0.7"/>
-    <text x="0" y="8" text-anchor="middle" fill="#42be65" font-size="20" font-weight="600">COMPRESS</text>
+    <!-- ESS text - slightly condensed to show compression effect -->
+    <text x="0" y="25" text-anchor="middle" fill="#ffffff" font-size="110" font-weight="bold" font-family="IBM Plex Sans, Arial, sans-serif" letter-spacing="-8">ESS</text>
+    
+    <!-- Compression lines (showing squeeze effect) -->
+    <line x1="-120" y1="-60" x2="-90" y2="-60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="-120" y1="0" x2="-90" y2="0" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="-120" y1="60" x2="-90" y2="60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    
+    <line x1="90" y1="-60" x2="120" y2="-60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="90" y1="0" x2="120" y2="0" stroke="#42be65" stroke-width="3" opacity="0.6"/>
+    <line x1="90" y1="60" x2="120" y2="60" stroke="#42be65" stroke-width="3" opacity="0.6"/>
   </g>
 </svg>
