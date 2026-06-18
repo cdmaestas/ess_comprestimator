@@ -24,9 +24,9 @@
     <circle cx="125" cy="-110" r="12" fill="#42be65"/>
     <circle cx="125" cy="110" r="12" fill="#42be65"/>
     
-    <!-- ESS text - fills circle top to bottom, horizontally compressed, green color, moved down -->
+    <!-- ESS text - fills circle top to bottom, horizontally compressed, WHITE for visibility -->
     <g transform="scale(0.5, 2.0)">
-      <text x="0" y="50" text-anchor="middle" fill="#42be65" font-size="220" font-weight="900" font-family="IBM Plex Sans, Arial, sans-serif" letter-spacing="-8">ESS</text>
+      <text x="0" y="50" text-anchor="middle" fill="#ffffff" font-size="220" font-weight="900" font-family="IBM Plex Sans, Arial, sans-serif" letter-spacing="-8">ESS</text>
     </g>
     
     <!-- Compression lines -->
