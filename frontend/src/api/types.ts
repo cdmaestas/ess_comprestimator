@@ -48,6 +48,7 @@ export interface CompressionResult {
   after_rtc_perc: number | null
   error: number | null
   tot_time: number | null
+  skipped_bytes_mb: number | null
   interpretation: string
 }
 
