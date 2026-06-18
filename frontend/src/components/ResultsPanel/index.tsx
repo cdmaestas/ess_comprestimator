@@ -21,6 +21,7 @@ import type { CompressionResult } from '../../api/types'
 import RatioTile from './RatioTile'
 import BlockDistChart from './BlockDistChart'
 import SizeComparisonChart from './SizeComparisonChart'
+import CompressibilityChart from './CompressibilityChart'
 
 const C_TEXT_SEC = '#c6c6c6'
 const C_DIVIDER  = '#393939'
@@ -52,6 +53,14 @@ export default function ResultsPanel({ result, jobId }: Props) {
 
       {/* ── Headline ratio ───────────────────────────────────────────── */}
       <RatioTile result={result} />
+
+      {/* ── Compressibility breakdown ────────────────────────────────── */}
+      {result.skipped_bytes_mb != null && result.skipped_bytes_mb > 0 && (
+        <>
+          <hr style={{ border: 'none', borderTop: `1px solid ${C_DIVIDER}`, margin: 0 }} />
+          <CompressibilityChart result={result} />
+        </>
+      )}
 
       {/* ── Block distribution ───────────────────────────────────────── */}
       {(result.num_zero_blocks != null || result.num_non_zero_blocks != null) && (
