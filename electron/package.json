@@ -7,14 +7,18 @@
     "start": "electron .",
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "postinstall": "node scripts/patch-blake2.js"
   },
   "devDependencies": {
     "electron": "^42.4.0",
     "electron-builder": "^26.15.3"
   },
   "overrides": {
-    "@noble/hashes": "1.5.0"
+    "@noble/hashes": "1.5.0",
+    "app-builder-lib": {
+      "@noble/hashes": "1.5.0"
+    }
   },
   "build": {
     "appId": "com.ess.comprestimator",
