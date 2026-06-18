@@ -17,6 +17,7 @@
     "appId": "com.ess.comprestimator",
     "productName": "Comprestimator",
     "copyright": "Copyright © 2026",
+    "icon": "assets/icon.svg",
     "directories": {
       "output": "../dist-electron",
       "buildResources": "assets"
