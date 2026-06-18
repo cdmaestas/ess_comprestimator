@@ -14,6 +14,14 @@ electron/node_modules/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+
+# TypeScript build info
+*.tsbuildinfo
+
+# C build artifacts
+*.o
+*.a
 
 # Logs & temp
 *.log
