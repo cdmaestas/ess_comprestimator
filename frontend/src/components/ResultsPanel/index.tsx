@@ -81,6 +81,12 @@ export default function ResultsPanel({ result, jobId }: Props) {
               result.initial_size > 0
                 ? `${((1 - result.compressed_size / result.initial_size) * 100).toFixed(1)}%`
                 : '—'],
+            result.skipped_bytes_mb != null && result.skipped_bytes_mb > 0
+              ? ['Skipped (incompressible)', (() => {
+                  const total = result.initial_size + result.skipped_bytes_mb
+                  const pct = total > 0 ? (result.skipped_bytes_mb / total * 100).toFixed(1) : '0.0'
+                  return `${fmtMB(result.skipped_bytes_mb)} (${pct}% of sample) — likely .zip, .jpg, .mp4 or encrypted files`
+                })()] : null,
             result.total_blocks_read != null
               ? ['Blocks read', result.total_blocks_read.toLocaleString()] : null,
             result.conf_comp != null
