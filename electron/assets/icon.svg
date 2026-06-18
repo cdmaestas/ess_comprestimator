@@ -9,29 +9,33 @@
   
   <circle cx="256" cy="256" r="240" fill="url(#bgGradient)"/>
   
-  <!-- Simple compression icon: two arrows pointing to center -->
-  <g transform="translate(256, 200)">
-    <!-- Left arrow -->
-    <path d="M -100,0 L -40,0 L -40,-15 L -10,0 L -40,15 L -40,0 Z" 
-          fill="#42be65" stroke="#ffffff" stroke-width="2"/>
-    <!-- Right arrow -->
-    <path d="M 100,0 L 40,0 L 40,-15 L 10,0 L 40,15 L 40,0 Z" 
-          fill="#42be65" stroke="#ffffff" stroke-width="2"/>
+  <!-- Compression tool visual: C-clamp/vise surrounding ESS -->
+  <g transform="translate(256, 256)">
+    <!-- Left side of clamp -->
+    <rect x="-140" y="-100" width="30" height="200" rx="5" fill="#ffffff" opacity="0.9"/>
+    <rect x="-140" y="-120" width="100" height="20" rx="5" fill="#ffffff" opacity="0.9"/>
     
-    <!-- Center dot -->
-    <circle cx="0" cy="0" r="12" fill="#ffffff"/>
+    <!-- Right side of clamp (screw mechanism) -->
+    <rect x="110" y="-100" width="30" height="200" rx="5" fill="#ffffff" opacity="0.9"/>
+    <rect x="40" y="-120" width="100" height="20" rx="5" fill="#ffffff" opacity="0.9"/>
+    
+    <!-- Screw threads (compression indicator) -->
+    <g opacity="0.7">
+      <line x1="75" y1="-80" x2="75" y2="80" stroke="#42be65" stroke-width="8"/>
+      <circle cx="75" cy="-60" r="4" fill="#42be65"/>
+      <circle cx="75" cy="-30" r="4" fill="#42be65"/>
+      <circle cx="75" cy="0" r="4" fill="#42be65"/>
+      <circle cx="75" cy="30" r="4" fill="#42be65"/>
+      <circle cx="75" cy="60" r="4" fill="#42be65"/>
+    </g>
+    
+    <!-- ESS text in center -->
+    <text x="0" y="20" text-anchor="middle" fill="#ffffff" font-size="120" font-weight="bold" font-family="IBM Plex Sans, Arial, sans-serif">ESS</text>
   </g>
   
-  <!-- IBM branding -->
-  <text x="256" y="300" text-anchor="middle" fill="#ffffff" font-size="42" font-weight="bold" font-family="IBM Plex Sans, Arial, sans-serif">IBM</text>
-  
-  <!-- Fusion Compress text -->
-  <text x="256" y="340" text-anchor="middle" fill="#ffffff" font-size="28" font-weight="300" font-family="IBM Plex Sans, Arial, sans-serif">Fusion</text>
-  <text x="256" y="375" text-anchor="middle" fill="#42be65" font-size="32" font-weight="600" font-family="IBM Plex Sans, Arial, sans-serif">Compress</text>
-  
-  <!-- Ratio indicator -->
+  <!-- Compression label at bottom -->
   <g transform="translate(256, 430)">
-    <rect x="-40" y="-18" width="80" height="36" rx="18" fill="#161616" opacity="0.7"/>
-    <text x="0" y="8" text-anchor="middle" fill="#42be65" font-size="22" font-weight="bold">4:1</text>
+    <rect x="-70" y="-18" width="140" height="36" rx="18" fill="#161616" opacity="0.7"/>
+    <text x="0" y="8" text-anchor="middle" fill="#42be65" font-size="20" font-weight="600">COMPRESS</text>
   </g>
 </svg>
