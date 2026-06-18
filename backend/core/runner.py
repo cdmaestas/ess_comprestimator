@@ -121,9 +121,8 @@ async def run_job(job_id: str) -> None:
                     stderr=asyncio.subprocess.STDOUT,  # merge for a unified log
                 )
 
-                # Store handle + PID so DELETE /api/jobs/{id} can cancel it.
+                # Store handle so DELETE /api/jobs/{id} can send SIGTERM.
                 registry.register_proc(job_id, proc)
-                state.pid = proc.pid
                 await registry.update(state)
 
                 # ── Stream output line-by-line ─────────────────────────────────
@@ -141,7 +140,6 @@ async def run_job(job_id: str) -> None:
 
                 await proc.wait()
                 registry.deregister_proc(job_id)
-                state.pid = None
 
                 # Return code -15 = SIGTERM (user cancelled)
                 if proc.returncode == -15:
@@ -165,7 +163,6 @@ async def run_job(job_id: str) -> None:
             state.error = str(exc)
             state.completed_at = datetime.now(timezone.utc)
             registry.deregister_proc(job_id)
-            state.pid = None
             await registry.update(state)
             await registry.push_log(job_id, f"[ERROR] {exc}")
             await registry.push_status(job_id, JobStatus.FAILED)

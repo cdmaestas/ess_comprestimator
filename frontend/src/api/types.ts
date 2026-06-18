@@ -27,7 +27,6 @@ export interface JobState extends JobSummary {
   log_lines: string[]
   warnings: string[]
   error: string | null
-  pid: number | null
   result: CompressionResult | null
 }
 
