@@ -13,6 +13,9 @@
     "electron": "^42.4.0",
     "electron-builder": "^26.15.3"
   },
+  "overrides": {
+    "@noble/hashes": "1.5.0"
+  },
   "build": {
     "appId": "com.ess.comprestimator",
     "productName": "Comprestimator",
