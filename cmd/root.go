@@ -77,9 +77,10 @@ type fileInfo struct {
 }
 
 type compressResult struct {
-    preCompress int64
-    postCompress int64
+    preCompress      int64
+    postCompress     int64
     samplesProcessed int64
+    skippedBytes     int64
 }
 
 const SAMPLE_LEN = 16384
@@ -189,15 +190,16 @@ func buildSampler(root string, errorLogger *log.Logger, excludePatterns []string
 // Given a file_info object, take file_info.read_count random samples from
 // the file (of size SAMPLE_LEN) and compress them, returning the pre and post
 // compressed sizes
-func compressSample(sample fileInfo) (int64, int64, int64, error) {
+func compressSample(sample fileInfo) (int64, int64, int64, int64, error) {
     file, err := os.Open(sample.path)
     if err != nil {
-        return 0, 0, 0, err
+        return 0, 0, 0, 0, err
     }
     defer file.Close()
 
     var pre int64
     var post int64
+    var skipped int64
     for range sample.count {
         var offset int64
         if sample.size - SAMPLE_LEN > 0 {
@@ -206,34 +208,30 @@ func compressSample(sample fileInfo) (int64, int64, int64, error) {
             offset = 0
         }
 
-        // Seek to a random point
         _, err = file.Seek(offset, 0)
         if err != nil {
-            return 0, 0, 0, err
+            return 0, 0, 0, 0, err
         }
 
-        // Read a sample from the random point
         buffer := make([]byte, SAMPLE_LEN)
         n, err := file.Read(buffer)
         if err != nil {
-            return 0, 0, 0, err
+            return 0, 0, 0, 0, err
         }
 
-        // Compress the sample (use only bytes actually read).
         // TryEncode returns nil for incompressible data (e.g. already-compressed
-        // or encrypted files) instead of erroring; skip those samples so the job
-        // completes with results from compressible files rather than failing.
-        pre += int64(n)
+        // or encrypted files). Track those bytes separately so we can report
+        // how much of the sampled data was skipped.
         compressed := minlz.TryEncode(nil, buffer[:n], minlz.LevelSuperFast)
         if compressed == nil {
-            pre -= int64(n)
+            skipped += int64(n)
             continue
         }
+        pre += int64(n)
         post += int64(len(compressed))
-
     }
-    
-    return pre, post, sample.count, err
+
+    return pre, post, sample.count, skipped, err
 }
 
 
@@ -251,14 +249,14 @@ func compressorWorker(jobs <-chan fileInfo, intermediateResults chan<- compressR
         if !more {
             return
         }
-        pre, post, samplesProcessed, err := compressSample(job)
+        pre, post, samplesProcessed, skipped, err := compressSample(job)
         if err != nil {
             if errorLogger != nil {
                 errorLogger.Printf("Failed to compress: %s: %v", job.path, err)
             }
             continue
         }
-        intermediateResults <- compressResult{pre, post, samplesProcessed}
+        intermediateResults <- compressResult{pre, post, samplesProcessed, skipped}
     }
 }
 
@@ -268,17 +266,19 @@ func accumulateResults(intermediateResults <-chan compressResult, finalResult ch
     var totalPre int64
     var totalPost int64
     var totalSamples int64
+    var totalSkipped int64
     startTime := time.Now().UnixMilli()
     for {
         result, more := <-intermediateResults
         if !more {
-            finalResult <- compressResult{totalPre, totalPost, totalSamples}
+            finalResult <- compressResult{totalPre, totalPost, totalSamples, totalSkipped}
             return
         }
 
         totalPre += result.preCompress
         totalPost += result.postCompress
         totalSamples += result.samplesProcessed
+        totalSkipped += result.skippedBytes
 
         nowTime := time.Now().UnixMilli()
 
@@ -387,6 +387,13 @@ func displayResults(res compressResult) {
     fmt.Printf("Estimated Compression Ratio %.3fx\n", ratio)
     fmt.Printf("Pre-compression size: %v\nPost-compression size: %v\n\n",
         prettyBytes(res.preCompress), prettyBytes(res.postCompress))
+
+    if res.skippedBytes > 0 {
+        totalSampled := res.preCompress + res.skippedBytes
+        skippedPct := 100.0 * float64(res.skippedBytes) / float64(totalSampled)
+        fmt.Printf("Note: %v of sampled data (%.1f%%) could not be compressed and was excluded from the estimate — likely already-compressed or encrypted files (e.g. .zip, .jpg, .mp4).\n",
+            prettyBytes(res.skippedBytes), skippedPct)
+    }
 
     if ratio > FCM4_MAX_COMPRESSION_RATIO {
         fmt.Println("Note: FCM4 drives are limited to 4x physical space. Use a compression ratio of 4x when provisioning vdisksets")
