@@ -13,7 +13,7 @@
  *   - Does NOT re-fetch when loading an already-terminal job (avoids spurious call).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Breadcrumb,
@@ -27,8 +27,10 @@ import {
 } from '@carbon/react'
 import { ArrowLeft } from '@carbon/icons-react'
 import type { JobState } from '../api/types'
+import { isTerminal, STATUS_TAG } from '../api/types'
 import { jobsApi } from '../api/jobsApi'
 import { useJobStream } from '../api/useJobStream'
+import { formatDuration } from '../utils/format'
 import JobProgress from '../components/JobProgress'
 import ResultsPanel from '../components/ResultsPanel'
 
@@ -42,12 +44,7 @@ function useDuration(startedAt: string | null, completedAt: string | null): stri
     return () => clearInterval(id)
   }, [startedAt, completedAt])
 
-  if (!startedAt) return '—'
-  const end = completedAt ? new Date(completedAt) : new Date()
-  const secs = Math.round((end.getTime() - new Date(startedAt).getTime()) / 1000)
-  if (secs < 60) return `${secs}s`
-  const mins = Math.floor(secs / 60)
-  return `${mins}m ${secs % 60}s`
+  return formatDuration(startedAt, completedAt)
 }
 
 // ── Sampling summary ─────────────────────────────────────────────────────────
@@ -81,8 +78,7 @@ export default function JobDetailPage() {
   // ── Streaming ─────────────────────────────────────────────────────────────
 
   // For already-terminal jobs we skip streaming (we already have all data from REST).
-  const isTerminalFromRest =
-    jobState?.status === 'complete' || jobState?.status === 'failed'
+  const isTerminalFromRest = jobState != null && isTerminal(jobState.status)
 
   const { lines: streamLines, status: streamStatus, done: streamDone } =
     useJobStream(!isTerminalFromRest && jobId ? jobId : null)
@@ -118,14 +114,14 @@ export default function JobDetailPage() {
 
   // ── Cancel ────────────────────────────────────────────────────────────────
 
-  const handleCancel = useCallback(async () => {
+  async function handleCancel() {
     if (!jobId) return
     try {
       await jobsApi.cancel(jobId)
     } catch {
       // ignore — job may have already finished
     }
-  }, [jobId])
+  }
 
   // Duration ticker
   const duration = useDuration(jobState?.started_at ?? null, jobState?.completed_at ?? null)
@@ -178,12 +174,11 @@ export default function JobDetailPage() {
         {/* ── Metadata chips ────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem', alignItems: 'center' }}>
           {/* Status */}
-          {{
-            queued:   <Tag type="cool-gray" size="sm">Queued</Tag>,
-            running:  <Tag type="blue"      size="sm">Running</Tag>,
-            complete: <Tag type="green"     size="sm">Complete</Tag>,
-            failed:   <Tag type="red"       size="sm">Failed</Tag>,
-          }[currentStatus]}
+          {(() => {
+            const { type, label } = STATUS_TAG[currentStatus] ?? { type: 'cool-gray' as const, label: currentStatus }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return <Tag type={type as any} size="sm">{label}</Tag>
+          })()}
 
           {/* Sampling mode */}
           <Tag type="outline" size="sm">{samplingLabel(jobState.request)}</Tag>

@@ -22,6 +22,13 @@ from backend.models.results import CompressionResult
 # Semaphore enforcing MAX_CONCURRENT_JOBS — created lazily.
 _semaphore: asyncio.Semaphore | None = None
 
+# Patterns emitted by the minlz compression library — not useful to display.
+_MINLZ_PATTERNS = ("Separator is not found", "chunk exceed", "[ERROR]")
+
+
+def _is_minlz_error(line: str) -> bool:
+    return any(p in line for p in _MINLZ_PATTERNS)
+
 
 def _get_semaphore() -> asyncio.Semaphore:
     global _semaphore
@@ -149,7 +156,7 @@ async def run_job(job_id: str) -> None:
                                     output_lines.append(line)
                                     
                                     # Skip minlz errors
-                                    if "Separator is not found" in line or "chunk exceed" in line or "[ERROR]" in line:
+                                    if _is_minlz_error(line):
                                         buffer.clear()
                                         continue
                                     
@@ -176,10 +183,7 @@ async def run_job(job_id: str) -> None:
                         if line:
                             output_lines.append(f"[STDERR] {line}")
                         # Filter out minlz library errors and error log notifications from UI
-                        if ("Separator is not found" in line or 
-                            "chunk exceed" in line or 
-                            "[ERROR]" in line or
-                            "Error log created at" in line):
+                        if _is_minlz_error(line) or "Error log created at" in line:
                             continue
                         if line:
                             await registry.push_log(job_id, f"[STDERR] {line}")

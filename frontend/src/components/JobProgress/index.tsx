@@ -5,7 +5,7 @@
  * Phase 4: the useJobStream hook is fully wired in and the cancel button works.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   Button,
   InlineLoading,
@@ -38,6 +38,23 @@ export default function JobProgress({
   }, [lines])
 
   const isRunning = status === 'running' || status === 'queued'
+
+  const displayLines = useMemo(() => {
+    const out: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const isProgress = line.includes('Ratio:') || line.includes('Progress')
+      if (isProgress) {
+        let j = i + 1
+        while (j < lines.length && (lines[j].includes('Ratio:') || lines[j].includes('Progress'))) j++
+        out.push(lines[j - 1])
+        i = j - 1
+      } else {
+        out.push(line)
+      }
+    }
+    return out
+  }, [lines])
 
   return (
     <div>
@@ -94,36 +111,12 @@ export default function JobProgress({
 
       {/* ── Log panel ──────────────────────────────────────────────── */}
       <div className="log-panel" role="log" aria-live="polite" aria-label="Job output">
-        {lines.length === 0 ? (
+        {displayLines.length === 0 ? (
           <span style={{ color: 'var(--cds-text-placeholder)' }}>
             Waiting for output…
           </span>
         ) : (
-          (() => {
-            // Group lines: replace consecutive progress lines with only the last one
-            const displayLines: string[] = []
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i]
-              const isProgress = line.includes('Ratio:') || line.includes('Progress')
-              
-              if (isProgress) {
-                // Look ahead to see if there are more progress lines
-                let j = i + 1
-                while (j < lines.length && (lines[j].includes('Ratio:') || lines[j].includes('Progress'))) {
-                  j++
-                }
-                // Only show the last progress line in this sequence
-                displayLines.push(lines[j - 1])
-                i = j - 1 // Skip to the last progress line
-              } else {
-                displayLines.push(line)
-              }
-            }
-            
-            return displayLines.map((line, i) => (
-              <div key={i}>{line}</div>
-            ))
-          })()
+          displayLines.map((line, i) => <div key={i}>{line}</div>)
         )}
         <div ref={bottomRef} className="log-panel__bottom" />
       </div>

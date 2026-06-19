@@ -5,7 +5,7 @@
  * Clicking a row navigates to /jobs/:jobId (JobDetailPage).
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   DataTable,
@@ -24,34 +24,18 @@ import {
   Tag,
   Button,
 } from '@carbon/react'
-import { View, TrashCan } from '@carbon/icons-react'
+import { View } from '@carbon/icons-react'
 import type { JobStatus, JobSummary } from '../../api/types'
+import { STATUS_TAG } from '../../api/types'
 import { jobsApi } from '../../api/jobsApi'
+import { formatDuration } from '../../utils/format'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Carbon v11 Tag 'type' values relevant here
-type CarbonTagType = 'cool-gray' | 'blue' | 'green' | 'red'
-
 function statusTag(status: JobStatus) {
-  const map: Record<JobStatus, { type: CarbonTagType; label: string }> = {
-    queued:   { type: 'cool-gray', label: 'Queued' },
-    running:  { type: 'blue',      label: 'Running' },
-    complete: { type: 'green',     label: 'Complete' },
-    failed:   { type: 'red',       label: 'Failed' },
-  }
-  const { type, label } = map[status] ?? { type: 'cool-gray' as CarbonTagType, label: status }
+  const { type, label } = STATUS_TAG[status] ?? { type: 'cool-gray', label: status }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return <Tag type={type as any} size="sm">{label}</Tag>
-}
-
-function formatDuration(started: string | null, completed: string | null): string {
-  if (!started) return '—'
-  const end = completed ? new Date(completed) : new Date()
-  const secs = Math.round((end.getTime() - new Date(started).getTime()) / 1000)
-  if (secs < 60) return `${secs}s`
-  const mins = Math.floor(secs / 60)
-  return `${mins}m ${secs % 60}s`
 }
 
 function formatRatio(ratio: number | null): string {
@@ -85,24 +69,23 @@ export default function JobList({ newJobIds = [] }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchJobs = useCallback(async () => {
-    try {
-      const data = await jobsApi.list()
-      setJobs(data)
-      setError(null)
-    } catch {
-      setError('Could not load jobs — is the backend running?')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   // Initial load + polling every 3 s
   useEffect(() => {
+    async function fetchJobs() {
+      try {
+        const data = await jobsApi.list()
+        setJobs(data)
+        setError(null)
+      } catch {
+        setError('Could not load jobs — is the backend running?')
+      } finally {
+        setLoading(false)
+      }
+    }
     fetchJobs()
     const id = setInterval(fetchJobs, 3000)
     return () => clearInterval(id)
-  }, [fetchJobs])
+  }, [])
 
   // ── Render helpers ────────────────────────────────────────────────────────
 

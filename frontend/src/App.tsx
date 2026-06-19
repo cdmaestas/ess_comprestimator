@@ -26,7 +26,6 @@ export default function App() {
             <HeaderGlobalAction
               aria-label="Activity"
               tooltipAlignment="end"
-              onClick={() => {}}
             >
               <Activity size={20} />
             </HeaderGlobalAction>

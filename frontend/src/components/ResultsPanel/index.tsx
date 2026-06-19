@@ -18,6 +18,7 @@
 import { Button } from '@carbon/react'
 import { Download } from '@carbon/icons-react'
 import type { CompressionResult } from '../../api/types'
+import { fmtMB } from '../../utils/format'
 import RatioTile from './RatioTile'
 import BlockDistChart from './BlockDistChart'
 import SizeComparisonChart from './SizeComparisonChart'
@@ -25,14 +26,6 @@ import CompressibilityChart from './CompressibilityChart'
 
 const C_TEXT_SEC = '#c6c6c6'
 const C_DIVIDER  = '#393939'
-
-// initial_size / compressed_size from the C binary are already in MB
-function fmtMB(mb: number): string {
-  if (mb >= 1_024)  return `${(mb / 1_024).toFixed(2)} GB`
-  if (mb >= 1)      return `${mb.toFixed(3)} MB`
-  if (mb >= 0.001)  return `${(mb * 1_024).toFixed(1)} KB`
-  return `${(mb * 1_048_576).toFixed(0)} B`
-}
 
 function fmtSecs(s: number | null | undefined): string {
   if (s == null) return '—'
