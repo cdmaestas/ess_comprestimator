@@ -20,6 +20,7 @@ import asyncio
 import csv
 import io
 import os
+import pathlib
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -27,7 +28,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.core import config
 from backend.core.job_registry import registry
-from backend.core.runner import run_job
+from backend.core.runner import _is_minlz_error, run_job
 from backend.models.job import JobRequest, JobState, JobStatus, JobSummary
 from backend.models.results import CompressionResult
 
@@ -49,7 +50,6 @@ def _validate_request(req: JobRequest) -> None:
     # Overwrites req.path so the rest of the pipeline sees the real path, not a
     # symlink or relative reference that could resolve differently in the subprocess.
     try:
-        import pathlib
         real = pathlib.Path(req.path).resolve(strict=True)
     except (OSError, ValueError):
         raise HTTPException(
@@ -66,10 +66,9 @@ def _validate_request(req: JobRequest) -> None:
     # Confine analysis to directories the local user owns or that are explicitly
     # intended for user data. This prevents another local process or a malicious
     # localhost request from probing sensitive system paths like /etc or /root.
-    import pathlib as _pl
-    _allowed = [_pl.Path.home()]
+    _allowed = [pathlib.Path.home()]
     for _extra in ("/Volumes", "/media", "/mnt", "/tmp", "/private/tmp"):
-        _p = _pl.Path(_extra)
+        _p = pathlib.Path(_extra)
         if _p.exists():
             _allowed.append(_p)
 
@@ -197,14 +196,11 @@ async def download_results_csv(job_id: str) -> StreamingResponse:
     writer.writerow([
         "job_id", "path", "status",
         "created_at", "started_at", "completed_at",
-        "compression_ratio", "initial_size_bytes", "compressed_size_bytes",
-        "size_reduction_pct",
+        "compression_ratio", "initial_size_mb", "compressed_size_mb",
+        "size_reduction_pct", "skipped_bytes_mb",
         "num_zero_blocks", "num_non_zero_blocks", "total_blocks_read",
         "conf_comp", "conf_zeros",
-        "dev_size_mb", "after_zero_size", "after_zero_perc",
-        "after_rtc_size", "after_rtc_perc",
-        "error_value", "tot_time_s",
-        "interpretation",
+        "tot_time_s", "interpretation",
     ])
 
     reduction_pct = (
@@ -223,17 +219,12 @@ async def download_results_csv(job_id: str) -> StreamingResponse:
         r.initial_size,
         r.compressed_size,
         reduction_pct,
+        r.skipped_bytes_mb,
         r.num_zero_blocks,
         r.num_non_zero_blocks,
         r.total_blocks_read,
         r.conf_comp,
         r.conf_zeros,
-        r.dev_size_mb,
-        r.after_zero_size,
-        r.after_zero_perc,
-        r.after_rtc_size,
-        r.after_rtc_perc,
-        r.error,
         r.tot_time,
         r.interpretation,
     ])
@@ -283,11 +274,7 @@ async def get_logs(
         GET /api/jobs/{id}/logs?since=12  → lines 12-N
     """
     state = await _get_or_404(job_id)
-    # Filter out minlz error messages from log lines before returning
-    lines = [
-        line for line in state.log_lines[since:]
-        if not ("Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]"))
-    ]
+    lines = [line for line in state.log_lines[since:] if not _is_minlz_error(line)]
     done = state.status in (JobStatus.COMPLETE, JobStatus.FAILED)
     return JSONResponse(
         content={
@@ -332,8 +319,7 @@ async def stream_job(websocket: WebSocket, job_id: str) -> None:
     # ── Replay finished jobs immediately ──────────────────────────────────────
     if state.status in (JobStatus.COMPLETE, JobStatus.FAILED):
         for line in state.log_lines:
-            # Filter out minlz error messages
-            if not ("Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]")):
+            if not _is_minlz_error(line):
                 await websocket.send_json({"type": "log", "line": line})
         await websocket.send_json({"type": "status", "status": state.status.value})
         await websocket.close()
@@ -354,11 +340,8 @@ async def stream_job(websocket: WebSocket, job_id: str) -> None:
                 # Sentinel: runner has closed the stream.
                 break
 
-            # Filter out minlz error messages from live stream
-            if msg.get("type") == "log":
-                line = msg.get("line", "")
-                if "Separator is not found" in line or "chunk exceed" in line or line.startswith("[ERROR]"):
-                    continue
+            if msg.get("type") == "log" and _is_minlz_error(msg.get("line", "")):
+                continue
             
             await websocket.send_json(msg)
 

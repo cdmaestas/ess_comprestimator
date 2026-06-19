@@ -3,18 +3,12 @@
  */
 
 import type { CompressionResult } from '../../api/types'
+import { fmtMB } from '../../utils/format'
 
 const C_COMPRESSIBLE = '#42be65'     // IBM green
 const C_INCOMPRESSIBLE = '#da1e28'   // IBM red
 const C_TEXT_PRIMARY = '#f4f4f4'
 const C_TEXT_SEC = '#c6c6c6'
-
-function fmtMB(mb: number): string {
-  if (mb >= 1_024) return `${(mb / 1_024).toFixed(2)} GB`
-  if (mb >= 1) return `${mb.toFixed(2)} MB`
-  if (mb >= 0.001) return `${(mb * 1_024).toFixed(1)} KB`
-  return `${(mb * 1_048_576).toFixed(0)} B`
-}
 
 interface Props {
   result: CompressionResult

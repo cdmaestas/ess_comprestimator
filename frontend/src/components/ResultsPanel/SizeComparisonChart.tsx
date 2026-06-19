@@ -18,6 +18,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { CompressionResult } from '../../api/types'
+import { fmtMB } from '../../utils/format'
 
 // Carbon g100
 const C_PRE    = '#6f6f6f'   // text-placeholder
@@ -25,12 +26,6 @@ const C_MID    = '#4589ff'   // support-info  (after zero removal)
 const C_POST   = '#24a148'   // support-success (final compressed)
 const C_GRID   = '#393939'
 const C_TEXT   = '#c6c6c6'
-
-// Values from the C binary are already in MB — no conversion needed
-function fmtMB(mb: number): string {
-  if (mb >= 1_024) return `${(mb / 1_024).toFixed(1)} GB`
-  return `${mb.toFixed(3)} MB`
-}
 
 interface Props {
   result: CompressionResult

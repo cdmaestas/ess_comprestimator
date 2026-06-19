@@ -4,6 +4,18 @@
 
 export type JobStatus = 'queued' | 'running' | 'complete' | 'failed'
 
+export function isTerminal(status: JobStatus): boolean {
+  return status === 'complete' || status === 'failed'
+}
+
+export type CarbonTagType = 'cool-gray' | 'blue' | 'green' | 'red'
+export const STATUS_TAG: Record<JobStatus, { type: CarbonTagType; label: string }> = {
+  queued:   { type: 'cool-gray', label: 'Queued' },
+  running:  { type: 'blue',      label: 'Running' },
+  complete: { type: 'green',     label: 'Complete' },
+  failed:   { type: 'red',       label: 'Failed' },
+}
+
 export interface JobRequest {
   path: string
   exhaustive_sampling?: boolean
