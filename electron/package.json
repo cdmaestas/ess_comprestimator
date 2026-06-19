@@ -2,6 +2,7 @@
   "name": "comprestimator",
   "version": "1.0.0",
   "description": "ESS Comprestimator — compression ratio estimator UI",
+  "homepage": "https://github.com/cdmaestas/ess_comprestimator",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
