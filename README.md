@@ -25,7 +25,15 @@ Modified for ESS by _Sarvesh Chezhian_.
 ### macOS
 
 1. Open the `.dmg` file and drag **Comprestimator** into your Applications folder.
-2. On first launch, macOS may show *"Apple cannot verify this app"*. Open **System Settings → Privacy & Security**, scroll to the blocked app entry, and click **Open Anyway**.
+2. Because the app is not yet notarized, macOS Gatekeeper may block it with one of two messages:
+
+   **"Apple cannot verify this app"** — open **System Settings → Privacy & Security**, scroll to the blocked-app entry, and click **Open Anyway**.
+
+   **"Comprestimator is damaged and can't be opened"** — this happens when macOS quarantines a file downloaded by a browser. Remove the quarantine flag in Terminal, then launch normally:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Comprestimator.app
+   ```
 
 ### Linux
 
