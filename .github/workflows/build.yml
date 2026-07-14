@@ -97,11 +97,41 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist-all
           merge-multiple: true
+
+      - name: Install signing tools
+        run: sudo apt-get install -y rpm
+
+      - name: Import GPG signing key
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null \
+            | grep "^sec" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG_KEY_ID=$KEY_ID" >> "$GITHUB_ENV"
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
+          printf '%%_gpg_name %s\n%%__gpg /usr/bin/gpg\n%%__gpg_sign_cmd %%{__gpg} gpg --batch --no-verbose --no-armor --no-secmem-warning -u "%%{_gpg_name}" -sbo %%{__signature_filename} --digest-algo sha256 %%{__plaintext_filename}\n' "$KEY_ID" > ~/.rpmmacros
+
+      - name: Sign RPM packages
+        run: |
+          for rpm in dist-all/*.rpm; do
+            rpmsign --addsign "$rpm"
+            echo "Signed: $rpm"
+          done
+
+      - name: Verify RPM signatures
+        run: |
+          rpm --import packaging/RPM-GPG-KEY-comprestimator
+          for rpm in dist-all/*.rpm; do
+            rpm --checksig "$rpm" && echo "OK: $rpm"
+          done
 
       - name: Create GitHub Release
         env:
@@ -111,4 +141,5 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "Release ${{ github.ref_name }}" \
             --generate-notes \
-            dist-all/*
+            dist-all/* \
+            packaging/RPM-GPG-KEY-comprestimator
