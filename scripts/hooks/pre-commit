@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Pre-commit hook: lint Python, vet Go, shellcheck Bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+ERRORS=0
+
+# ── Python: ruff lint + format check ──────────────────────────────────────────
+if command -v ruff &>/dev/null; then
+  echo "[pre-commit] ruff check..."
+  if ! ruff check backend/ tests/; then
+    echo "  FAIL: ruff found lint errors. Run 'ruff check --fix backend/ tests/' to auto-fix."
+    ERRORS=1
+  fi
+  if ! ruff format --check backend/ tests/; then
+    echo "  FAIL: ruff found formatting issues. Run 'ruff format backend/ tests/' to fix."
+    ERRORS=1
+  fi
+else
+  echo "[pre-commit] ruff not found — skipping Python lint (pip install ruff)"
+fi
+
+# ── Go: vet ───────────────────────────────────────────────────────────────────
+if command -v go &>/dev/null; then
+  echo "[pre-commit] go vet..."
+  if ! go vet ./...; then
+    echo "  FAIL: go vet found issues."
+    ERRORS=1
+  fi
+else
+  echo "[pre-commit] go not found — skipping Go vet"
+fi
+
+# ── Bash: shellcheck ──────────────────────────────────────────────────────────
+if command -v shellcheck &>/dev/null; then
+  echo "[pre-commit] shellcheck..."
+  SHELL_SCRIPTS=()
+  while IFS= read -r -d '' f; do
+    SHELL_SCRIPTS+=("$f")
+  done < <(find . -name "*.sh" \
+    -not -path "./.git/*" \
+    -not -path "*/node_modules/*" \
+    -print0)
+  if [[ ${#SHELL_SCRIPTS[@]} -gt 0 ]]; then
+    if ! shellcheck "${SHELL_SCRIPTS[@]}"; then
+      echo "  FAIL: shellcheck found issues."
+      ERRORS=1
+    fi
+  fi
+else
+  echo "[pre-commit] shellcheck not found — skipping (brew install shellcheck)"
+fi
+
+if [[ "$ERRORS" -ne 0 ]]; then
+  echo ""
+  echo "Pre-commit checks failed. Fix the issues above and retry."
+  exit 1
+fi
+
+echo "[pre-commit] All checks passed."

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Pre-push hook: run full test suite before pushing
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "[pre-push] Running backend test suite..."
+
+VENV="$ROOT/.venv"
+if [[ ! -f "$VENV/bin/activate" ]]; then
+  echo "  No .venv found — skipping Python tests (run ./dev.sh once to create it)"
+  exit 0
+fi
+
+# shellcheck disable=SC1091
+source "$VENV/bin/activate"
+
+if ! python -m pytest tests/ -q --tb=short; then
+  echo ""
+  echo "Pre-push: tests failed. Fix failing tests before pushing."
+  exit 1
+fi
+
+echo "[pre-push] All tests passed."

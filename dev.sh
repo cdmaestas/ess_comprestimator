@@ -15,6 +15,22 @@ export MOCK_BINARY="${MOCK_BINARY:-false}"
 export COMPRESTIMATOR_PATH="${COMPRESTIMATOR_PATH:-$REPO_ROOT/ess_comprestimator}"
 export DEV_CORS="true"   # allow the Vite dev server origin in the CORS allowlist
 
+# ── Git hooks ─────────────────────────────────────────────────────────────────
+# Copy hooks from scripts/hooks/ into .git/hooks/ if they are not already there
+# or are older than the source. This keeps hooks in sync without a hook manager.
+HOOKS_SRC="$REPO_ROOT/scripts/hooks"
+HOOKS_DST="$REPO_ROOT/.git/hooks"
+if [[ -d "$HOOKS_SRC" ]]; then
+  for hook in "$HOOKS_SRC"/*; do
+    name="$(basename "$hook")"
+    if [[ ! -f "$HOOKS_DST/$name" ]] || [[ "$hook" -nt "$HOOKS_DST/$name" ]]; then
+      cp "$hook" "$HOOKS_DST/$name"
+      chmod +x "$HOOKS_DST/$name"
+      echo "▶ Installed git hook: $name"
+    fi
+  done
+fi
+
 # ── Python deps ───────────────────────────────────────────────────────────────
 VENV="$REPO_ROOT/.venv"
 if [[ ! -f "$VENV/bin/activate" ]]; then
