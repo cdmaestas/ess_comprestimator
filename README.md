@@ -242,6 +242,12 @@ Run the FastAPI backend and Vite frontend side-by-side without packaging:
 ./dev.sh
 ```
 
+`dev.sh` automatically:
+- Creates a Python virtual environment in `.venv/` if one does not exist
+- Installs Python dependencies from `backend/requirements.txt`
+- Runs `npm install` in `frontend/` if `node_modules/` is missing
+- Installs git hooks (`scripts/hooks/`) into `.git/hooks/`
+
 | Service | URL |
 |---------|-----|
 | Frontend (Vite) | http://localhost:5173 |
@@ -258,6 +264,36 @@ Run backend tests:
 ```bash
 python3 -m pytest tests/ -v
 ```
+
+Run dependency vulnerability scan:
+
+```bash
+pip install pip-audit
+pip-audit -r backend/requirements.txt
+```
+
+### Git hooks
+
+Hooks are stored in `scripts/hooks/` and installed automatically by `dev.sh`. They run:
+
+- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed)
+- **pre-push** — full `pytest` suite
+
+To install manually without running `dev.sh`:
+
+```bash
+cp scripts/hooks/pre-commit scripts/hooks/pre-push .git/hooks/
+chmod +x .git/hooks/pre-commit .git/hooks/pre-push
+```
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `COMPRESTIMATOR_PATH` | `./ess_comprestimator` | Path to the Go binary |
+| `MOCK_BINARY` | `false` | Return synthetic results without invoking the binary |
+| `MAX_CONCURRENT_JOBS` | `3` | Maximum parallel analysis jobs (must be an integer ≥ 1) |
+| `DEV_CORS` | *(unset)* | Set to `true` to allow the Vite dev server origin — **never set in production** |
 
 ---
 
