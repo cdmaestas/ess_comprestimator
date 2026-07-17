@@ -9,6 +9,44 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint-and-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Install Python tools
+        run: pip install --quiet ruff pip-audit -r backend/requirements.txt pytest pytest-asyncio httpx
+
+      - name: Ruff lint
+        run: ruff check backend/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check backend/ tests/
+
+      - name: Backend tests
+        run: python -m pytest tests/ -q
+
+      - name: pip-audit (dependency vulnerability scan)
+        run: pip-audit -r backend/requirements.txt
+
+      - name: Shellcheck
+        run: |
+          sudo apt-get install -y shellcheck -q
+          find . -name "*.sh" -not -path "./.git/*" -not -path "*/node_modules/*" \
+            | xargs shellcheck
+
   build:
     strategy:
       fail-fast: false

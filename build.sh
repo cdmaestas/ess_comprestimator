@@ -71,7 +71,7 @@ if [[ "$SKIP_FRONTEND" == "true" ]]; then
   echo "==> [2/5]  Skipping frontend build (--skip-frontend)"
 else
   echo "==> [2/5]  Build React frontend"
-  (cd frontend && npm install --prefer-offline 2>/dev/null || npm install)
+  (cd frontend && { npm install --prefer-offline 2>/dev/null || npm install; })
   (cd frontend && npm run build)
 fi
 
@@ -114,7 +114,7 @@ echo "    Binary: $BACKEND_BIN  ($(du -sh "$BACKEND_BIN" | cut -f1))"
 
 # ── Step 4: Install Electron dependencies ─────────────────────────────────────
 echo "==> [4/5]  Install Electron dependencies"
-(cd electron && npm install --prefer-offline 2>/dev/null || npm install)
+(cd electron && { npm install --prefer-offline 2>/dev/null || npm install; })
 
 # ── Step 5: Package with electron-builder ────────────────────────────────────
 echo "==> [5/5]  Package Electron app ($PLATFORM) → dist-electron/"
