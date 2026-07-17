@@ -24,7 +24,9 @@ class JobStatus(str, Enum):
 class JobRequest(BaseModel):
     """Parameters submitted by the user to create a new job."""
 
-    path: str = Field(..., description="Absolute path to the file or directory to analyse")
+    path: str = Field(
+        ..., description="Absolute path to the file or directory to analyse"
+    )
 
     exhaustive_sampling: bool = Field(
         False,
@@ -35,7 +37,7 @@ class JobRequest(BaseModel):
         ge=0.1,
         le=100.0,
         description="Percentage of directory size to sample (0.1–100). "
-                    "Mutually exclusive with exhaustive_sampling.",
+        "Mutually exclusive with exhaustive_sampling.",
     )
     exclude: List[str] = Field(
         default_factory=list,
@@ -46,15 +48,17 @@ class JobRequest(BaseModel):
     @classmethod
     def _validate_exclude_patterns(cls, v: List[str]) -> List[str]:
         import re as _re
+
         # Allow printable glob characters; block leading dashes (CLI flag confusion),
         # null bytes, and newlines (argument parser injection).
-        _SAFE = _re.compile(r'^[^\x00\n\r\-][^\x00\n\r]*$')
+        _SAFE = _re.compile(r"^[^\x00\n\r\-][^\x00\n\r]*$")
         for pattern in v:
             if not _SAFE.match(pattern):
                 raise ValueError(
                     f"Exclude pattern contains invalid characters or starts with '-': {pattern!r}"
                 )
         return v
+
     skip_hidden: bool = Field(
         False,
         description="Skip hidden files and directories (names starting with '.')",

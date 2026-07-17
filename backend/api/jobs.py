@@ -19,11 +19,17 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
-import os
 import pathlib
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from backend.core import config
@@ -38,6 +44,7 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _validate_request(req: JobRequest) -> None:
     if req.exhaustive_sampling and req.sampling_percentage is not None:
@@ -76,8 +83,10 @@ def _validate_request(req: JobRequest) -> None:
             _allowed.append(_p.resolve())
 
     real_str = str(real)
-    if not any(real_str == str(root) or real_str.startswith(str(root) + "/")
-               for root in _allowed):
+    if not any(
+        real_str == str(root) or real_str.startswith(str(root) + "/")
+        for root in _allowed
+    ):
         raise HTTPException(
             status_code=403,
             detail=(
@@ -111,6 +120,7 @@ async def _get_or_404(job_id: str) -> JobState:
 # ──────────────────────────────────────────────────────────────────────────────
 # REST — job lifecycle
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.post("", response_model=JobSummary, status_code=202)
 async def create_job(req: JobRequest, background_tasks: BackgroundTasks) -> JobSummary:
@@ -177,6 +187,7 @@ async def cancel_job(job_id: str) -> JSONResponse:
 # REST — results
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/{job_id}/results.csv")
 async def download_results_csv(job_id: str) -> StreamingResponse:
     """
@@ -196,41 +207,57 @@ async def download_results_csv(job_id: str) -> StreamingResponse:
     buf = io.StringIO()
     writer = csv.writer(buf)
 
-    writer.writerow([
-        "job_id", "path", "status",
-        "created_at", "started_at", "completed_at",
-        "compression_ratio", "initial_size_mb", "compressed_size_mb",
-        "size_reduction_pct", "skipped_bytes_mb",
-        "num_zero_blocks", "num_non_zero_blocks", "total_blocks_read",
-        "conf_comp", "conf_zeros",
-        "tot_time_s", "interpretation",
-    ])
+    writer.writerow(
+        [
+            "job_id",
+            "path",
+            "status",
+            "created_at",
+            "started_at",
+            "completed_at",
+            "compression_ratio",
+            "initial_size_mb",
+            "compressed_size_mb",
+            "size_reduction_pct",
+            "skipped_bytes_mb",
+            "num_zero_blocks",
+            "num_non_zero_blocks",
+            "total_blocks_read",
+            "conf_comp",
+            "conf_zeros",
+            "tot_time_s",
+            "interpretation",
+        ]
+    )
 
     reduction_pct = (
         round((1 - r.compressed_size / r.initial_size) * 100, 2)
-        if r.initial_size > 0 else None
+        if r.initial_size > 0
+        else None
     )
 
-    writer.writerow([
-        job_id,
-        state.request.path,
-        state.status.value,
-        state.created_at.isoformat(),
-        state.started_at.isoformat() if state.started_at else "",
-        state.completed_at.isoformat() if state.completed_at else "",
-        r.compression_ratio,
-        r.initial_size,
-        r.compressed_size,
-        reduction_pct,
-        r.skipped_bytes_mb,
-        r.num_zero_blocks,
-        r.num_non_zero_blocks,
-        r.total_blocks_read,
-        r.conf_comp,
-        r.conf_zeros,
-        r.tot_time,
-        r.interpretation,
-    ])
+    writer.writerow(
+        [
+            job_id,
+            state.request.path,
+            state.status.value,
+            state.created_at.isoformat(),
+            state.started_at.isoformat() if state.started_at else "",
+            state.completed_at.isoformat() if state.completed_at else "",
+            r.compression_ratio,
+            r.initial_size,
+            r.compressed_size,
+            reduction_pct,
+            r.skipped_bytes_mb,
+            r.num_zero_blocks,
+            r.num_non_zero_blocks,
+            r.total_blocks_read,
+            r.conf_comp,
+            r.conf_zeros,
+            r.tot_time,
+            r.interpretation,
+        ]
+    )
 
     buf.seek(0)
     filename = f"comprestimator_{job_id[:8]}.csv"
@@ -258,6 +285,7 @@ async def get_results(job_id: str) -> CompressionResult:
 # ──────────────────────────────────────────────────────────────────────────────
 # REST — log polling fallback
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/{job_id}/logs")
 async def get_logs(
@@ -294,6 +322,7 @@ async def get_logs(
 # ──────────────────────────────────────────────────────────────────────────────
 # WebSocket — live stream (fan-out safe)
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.websocket("/{job_id}/stream")
 async def stream_job(websocket: WebSocket, job_id: str) -> None:
@@ -345,7 +374,7 @@ async def stream_job(websocket: WebSocket, job_id: str) -> None:
 
             if msg.get("type") == "log" and _is_minlz_error(msg.get("line", "")):
                 continue
-            
+
             await websocket.send_json(msg)
 
             if msg.get("type") == "status" and msg.get("status") in (

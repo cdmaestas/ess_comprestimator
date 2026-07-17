@@ -22,17 +22,20 @@ from pydantic import BaseModel
 
 _UNITS_TO_MB = {
     "bytes": 1 / 1_048_576,
-    "kb":    1 / 1_024,
-    "mb":    1.0,
-    "gb":    1_024.0,
-    "tb":    1_048_576.0,
-    "pb":    1_073_741_824.0,
+    "kb": 1 / 1_024,
+    "mb": 1.0,
+    "gb": 1_024.0,
+    "tb": 1_048_576.0,
+    "pb": 1_073_741_824.0,
 }
 
-_RE_RATIO   = re.compile(r"Estimated Compression Ratio\s+([\d.]+)x", re.IGNORECASE)
-_RE_PRE     = re.compile(r"Pre-compression size:\s+([\d.]+)\s*(\w+)", re.IGNORECASE)
-_RE_POST    = re.compile(r"Post-compression size:\s+([\d.]+)\s*(\w+)", re.IGNORECASE)
-_RE_SKIPPED = re.compile(r"Note:\s+([\d.]+)\s*(\w+)\s+of sampled data.*?could not be compressed", re.IGNORECASE)
+_RE_RATIO = re.compile(r"Estimated Compression Ratio\s+([\d.]+)x", re.IGNORECASE)
+_RE_PRE = re.compile(r"Pre-compression size:\s+([\d.]+)\s*(\w+)", re.IGNORECASE)
+_RE_POST = re.compile(r"Post-compression size:\s+([\d.]+)\s*(\w+)", re.IGNORECASE)
+_RE_SKIPPED = re.compile(
+    r"Note:\s+([\d.]+)\s*(\w+)\s+of sampled data.*?could not be compressed",
+    re.IGNORECASE,
+)
 
 
 def _parse_size_mb(value: str, unit: str) -> float:
@@ -68,9 +71,9 @@ class CompressionResult(BaseModel):
     @classmethod
     def from_stdout(cls, stdout: str) -> "CompressionResult":
         """Parse the Go binary's stdout and return a CompressionResult."""
-        ratio_m   = _RE_RATIO.search(stdout)
-        pre_m     = _RE_PRE.search(stdout)
-        post_m    = _RE_POST.search(stdout)
+        ratio_m = _RE_RATIO.search(stdout)
+        pre_m = _RE_PRE.search(stdout)
+        post_m = _RE_POST.search(stdout)
         skipped_m = _RE_SKIPPED.search(stdout)
 
         if not (ratio_m and pre_m and post_m):
@@ -79,12 +82,13 @@ class CompressionResult(BaseModel):
                 "Check the job log for errors."
             )
 
-        ratio           = float(ratio_m.group(1))
-        initial_size    = _parse_size_mb(pre_m.group(1),  pre_m.group(2))
+        ratio = float(ratio_m.group(1))
+        initial_size = _parse_size_mb(pre_m.group(1), pre_m.group(2))
         compressed_size = _parse_size_mb(post_m.group(1), post_m.group(2))
         skipped_bytes_mb = (
             _parse_size_mb(skipped_m.group(1), skipped_m.group(2))
-            if skipped_m else None
+            if skipped_m
+            else None
         )
 
         if ratio >= 4.0:

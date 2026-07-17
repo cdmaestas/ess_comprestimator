@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # PyInstaller compatibility: add extracted directory to sys.path
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     sys.path.insert(0, sys._MEIPASS)
 
 from fastapi import FastAPI
@@ -52,11 +52,7 @@ app = FastAPI(
 # ──────────────────────────────────────────────────────────────────────────────
 
 _DEV_CORS = os.environ.get("DEV_CORS", "").lower() in ("1", "true")
-_cors_origins = (
-    ["http://localhost:5173", "http://127.0.0.1:5173"]
-    if _DEV_CORS
-    else []
-)
+_cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"] if _DEV_CORS else []
 
 app.add_middleware(
     CORSMiddleware,
@@ -76,6 +72,7 @@ app.include_router(jobs_router)
 # Health endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.get("/health", tags=["meta"])
 async def health() -> JSONResponse:
     binary_ok = os.path.isfile(config.COMPRESTIMATOR_PATH)
@@ -88,6 +85,7 @@ async def health() -> JSONResponse:
         }
     )
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Static files — serve the React build when it exists
 # ──────────────────────────────────────────────────────────────────────────────
@@ -96,7 +94,9 @@ _FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
 if _FRONTEND_DIST.is_dir():
     # Serve static assets (JS, CSS, images) under /assets
-    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
+    app.mount(
+        "/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets"
+    )
 
     # Catch-all: serve index.html for all non-API routes so React Router works
     from fastapi.responses import FileResponse
