@@ -108,14 +108,30 @@ jobs:
 
       - name: Build
         env:
-          # electron-builder reads CSC_* for signing; leave blank when no cert.
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # electron-builder notarization (notarytool)
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: ./build.sh
+          # electron-builder reads CSC_* for signing. An empty-but-defined
+          # CSC_LINK makes it treat "" as a cert path and fail, so the run
+          # step below only exports the CSC_*/APPLE_* vars when the secrets
+          # are actually set (forks and PRs produce unsigned builds).
+          _APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          _APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          _APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          _APPLE_ID: ${{ secrets.APPLE_ID }}
+          _APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          if [ -n "$_APPLE_CERTIFICATE" ]; then
+            export CSC_LINK="$_APPLE_CERTIFICATE"
+            export CSC_KEY_PASSWORD="$_APPLE_CERTIFICATE_PASSWORD"
+          else
+            # No cert: disable signing lookup entirely on macOS runners.
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          if [ -n "$_APPLE_ID" ]; then
+            # electron-builder notarization (notarytool)
+            export APPLE_ID="$_APPLE_ID"
+            export APPLE_APP_SPECIFIC_PASSWORD="$_APPLE_APP_SPECIFIC_PASSWORD"
+            export APPLE_TEAM_ID="$_APPLE_TEAM_ID"
+          fi
+          ./build.sh
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
