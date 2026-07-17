@@ -21,13 +21,9 @@ def _get_max_concurrent_jobs() -> int:
     try:
         value = int(raw)
     except ValueError:
-        raise ValueError(
-            f"MAX_CONCURRENT_JOBS must be an integer, got {raw!r}"
-        )
+        raise ValueError(f"MAX_CONCURRENT_JOBS must be an integer, got {raw!r}")
     if value < 1:
-        raise ValueError(
-            f"MAX_CONCURRENT_JOBS must be >= 1, got {value}"
-        )
+        raise ValueError(f"MAX_CONCURRENT_JOBS must be >= 1, got {value}")
     return value
 
 

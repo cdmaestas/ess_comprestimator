@@ -14,13 +14,12 @@ Key Phase 2 additions over Phase 1:
 from __future__ import annotations
 
 import asyncio
-import signal
 from typing import Dict, List, Optional
 
 from backend.models.job import JobState, JobStatus
 
 
-_MAX_JOBS = 100       # oldest jobs pruned once this limit is exceeded
+_MAX_JOBS = 100  # oldest jobs pruned once this limit is exceeded
 _MAX_LOG_LINES = 10_000  # per-job cap; a truncation notice replaces dropped lines
 
 
@@ -49,10 +48,11 @@ class JobRegistry:
             # Prune oldest terminal jobs once we exceed the cap.
             if len(self._jobs) > _MAX_JOBS:
                 terminal = [
-                    jid for jid, s in self._jobs.items()
+                    jid
+                    for jid, s in self._jobs.items()
                     if s.status.value in ("complete", "failed")
                 ]
-                for jid in terminal[:len(self._jobs) - _MAX_JOBS]:
+                for jid in terminal[: len(self._jobs) - _MAX_JOBS]:
                     self._jobs.pop(jid, None)
                     self._subscribers.pop(jid, None)
         return state
@@ -86,7 +86,7 @@ class JobRegistry:
         if proc is None:
             return False
         try:
-            proc.terminate()   # SIGTERM — allows the child to clean up
+            proc.terminate()  # SIGTERM — allows the child to clean up
         except ProcessLookupError:
             pass  # already exited
         return True
@@ -123,8 +123,13 @@ class JobRegistry:
             if len(state.log_lines) >= _MAX_LOG_LINES:
                 # Replace the last line with a truncation notice rather than
                 # growing without bound. Subsequent lines are silently dropped.
-                if state.log_lines[-1] != "[...log truncated — output limit reached...]":
-                    state.log_lines.append("[...log truncated — output limit reached...]")
+                if (
+                    state.log_lines[-1]
+                    != "[...log truncated — output limit reached...]"
+                ):
+                    state.log_lines.append(
+                        "[...log truncated — output limit reached...]"
+                    )
                 return
             state.log_lines.append(line)
             # Extract accuracy warnings produced by run_comprestimator.py
@@ -151,9 +156,7 @@ class JobRegistry:
     # ------------------------------------------------------------------
 
     def running_count(self) -> int:
-        return sum(
-            1 for s in self._jobs.values() if s.status == JobStatus.RUNNING
-        )
+        return sum(1 for s in self._jobs.values() if s.status == JobStatus.RUNNING)
 
 
 # Module-level singleton — imported by both the API layer and the runner.

@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 from backend.core import config
 from backend.core.job_registry import registry
@@ -49,7 +48,7 @@ def _build_cli_args(state: JobState) -> list[str]:
     if req.skip_hidden:
         args.append("--exclude-hidden")
 
-    for pattern in (req.exclude or []):
+    for pattern in req.exclude or []:
         args += ["--exclude", pattern]
 
     return args
@@ -134,7 +133,7 @@ async def run_job(job_id: str) -> None:
                 # ── Stream output line-by-line ─────────────────────────────────
                 assert proc.stdout is not None
                 assert proc.stderr is not None
-                
+
                 # Read stdout byte-by-byte to capture \r-terminated progress updates
                 async def read_stdout():
                     buffer = bytearray()
@@ -143,26 +142,26 @@ async def run_job(job_id: str) -> None:
                         chunk = await proc.stdout.read(1)
                         if not chunk:
                             break
-                        
+
                         buffer.extend(chunk)
-                        
+
                         # Process on \n or \r
-                        if chunk in (b'\n', b'\r'):
+                        if chunk in (b"\n", b"\r"):
                             if buffer:
                                 line = buffer.decode(errors="replace").strip()
                                 if line:
                                     output_lines.append(line)
-                                    
+
                                     # Skip minlz errors
                                     if _is_minlz_error(line):
                                         buffer.clear()
                                         continue
-                                    
+
                                     # For progress lines (with \r), only send if content changed
                                     # Progress lines contain "Ratio:" or "Progress"
                                     is_progress = "Ratio:" in line or "Progress" in line
-                                    
-                                    if chunk == b'\r' and is_progress:
+
+                                    if chunk == b"\r" and is_progress:
                                         # Only send if different from last progress line
                                         if line != last_progress_line:
                                             await registry.push_log(job_id, line)
@@ -170,10 +169,12 @@ async def run_job(job_id: str) -> None:
                                     else:
                                         # Regular line with \n - always send
                                         await registry.push_log(job_id, line)
-                                        last_progress_line = ""  # Reset progress tracking
-                                
+                                        last_progress_line = (
+                                            ""  # Reset progress tracking
+                                        )
+
                                 buffer.clear()
-                
+
                 async def read_stderr():
                     async for raw_line in proc.stderr:
                         line = raw_line.decode(errors="replace").rstrip("\r\n")
@@ -185,7 +186,7 @@ async def run_job(job_id: str) -> None:
                             continue
                         if line:
                             await registry.push_log(job_id, f"[STDERR] {line}")
-                
+
                 await asyncio.gather(read_stdout(), read_stderr())
                 await proc.wait()
                 registry.deregister_proc(job_id)
@@ -193,15 +194,17 @@ async def run_job(job_id: str) -> None:
                 # Check exit status
                 if proc.returncode == -15:
                     raise RuntimeError("Job cancelled by user")
-                
+
                 # Check if binary produced results section (even if exit code is 0)
                 full_output = "\n".join(output_lines)
                 has_results = "-- Comprestimator Results" in full_output
-                
+
                 if proc.returncode != 0 or not has_results:
                     # Binary failed or exited early without results
-                    output_sample = "\n".join(output_lines[-15:]) if output_lines else "(no output)"
-                    
+                    output_sample = (
+                        "\n".join(output_lines[-15:]) if output_lines else "(no output)"
+                    )
+
                     if not has_results and "Mapping directory" in full_output:
                         # Binary stopped during directory mapping phase
                         raise RuntimeError(
@@ -216,7 +219,7 @@ async def run_job(job_id: str) -> None:
                         raise RuntimeError(
                             f"Binary completed but produced no results.\n{output_sample}"
                         )
-                
+
                 # Parse results from output
                 state.result = CompressionResult.from_stdout(full_output)
 
@@ -228,28 +231,37 @@ async def run_job(job_id: str) -> None:
 
         except Exception as exc:  # noqa: BLE001
             error_msg = str(exc)
-            
+
             # Categorize failure for clearer diagnostics
             if "Could not find compression results" in error_msg:
                 # Binary ran but produced no results section
-                output_sample = "\n".join(output_lines[-15:]) if output_lines else "(no output)"
-                
+                output_sample = (
+                    "\n".join(output_lines[-15:]) if output_lines else "(no output)"
+                )
+
                 # Check for common causes
-                if any("0 files" in line or "no files" in line.lower() for line in output_lines):
+                if any(
+                    "0 files" in line or "no files" in line.lower()
+                    for line in output_lines
+                ):
                     state.error = "No files found to compress (check exclude patterns and permissions)"
                 elif any("error" in line.lower() for line in output_lines):
-                    state.error = "Binary encountered errors during execution (check error log)"
+                    state.error = (
+                        "Binary encountered errors during execution (check error log)"
+                    )
                 else:
                     state.error = "Binary completed but produced no compression results"
-                
+
                 await registry.push_log(job_id, f"[ERROR] {state.error}")
-                await registry.push_log(job_id, f"[DEBUG] Full output:\n{output_sample}")
+                await registry.push_log(
+                    job_id, f"[DEBUG] Full output:\n{output_sample}"
+                )
             elif "Separator is not found" in error_msg or "chunk exceed" in error_msg:
                 state.error = f"Compression library warning: {error_msg}"
             else:
                 await registry.push_log(job_id, f"[ERROR] {error_msg}")
                 state.error = error_msg
-            
+
             state.status = JobStatus.FAILED
             state.completed_at = datetime.now(timezone.utc)
             registry.deregister_proc(job_id)

@@ -43,6 +43,7 @@ _TEST_PATH = str(os.path.dirname(os.path.abspath(__file__)))
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _create_job(**kwargs: Any) -> dict:
     payload = {"path": _TEST_PATH, **kwargs}
     resp = CLIENT.post("/api/jobs", json=payload)
@@ -64,6 +65,7 @@ def _wait_for_terminal(job_id: str, timeout: float = 15.0) -> dict:
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 class TestHealth:
     def test_health_shape(self):
@@ -141,7 +143,7 @@ class TestJobLifecycle:
 
     def test_warnings_extracted_from_logs(self):
         body = _create_job()
-        state = _wait_for_terminal(body["job_id"])
+        _wait_for_terminal(body["job_id"])
         full = CLIENT.get(f"/api/jobs/{body['job_id']}").json()
         # Mock run emits one "Note:" line — verify it ended up in warnings.
         assert len(full["warnings"]) >= 1
@@ -201,7 +203,8 @@ class TestWebSocketStream:
                 msg = ws.receive_json()
                 received.append(msg)
                 if msg.get("type") == "status" and msg["status"] in (
-                    "complete", "failed"
+                    "complete",
+                    "failed",
                 ):
                     break
 
@@ -244,7 +247,8 @@ class TestWebSocketStream:
                     msg = ws.receive_json()
                     results[key].append(msg)
                     if msg.get("type") == "status" and msg["status"] in (
-                        "complete", "failed"
+                        "complete",
+                        "failed",
                     ):
                         break
 
