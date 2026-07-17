@@ -8,13 +8,21 @@ cd "$ROOT"
 ERRORS=0
 
 # ── Python: ruff lint + format check ──────────────────────────────────────────
-if command -v ruff &>/dev/null; then
+# Prefer the repo venv's ruff so the hook matches CI even when ruff isn't on PATH.
+RUFF=""
+if [[ -x "$ROOT/.venv/bin/ruff" ]]; then
+  RUFF="$ROOT/.venv/bin/ruff"
+elif command -v ruff &>/dev/null; then
+  RUFF="ruff"
+fi
+
+if [[ -n "$RUFF" ]]; then
   echo "[pre-commit] ruff check..."
-  if ! ruff check backend/ tests/; then
+  if ! "$RUFF" check backend/ tests/; then
     echo "  FAIL: ruff found lint errors. Run 'ruff check --fix backend/ tests/' to auto-fix."
     ERRORS=1
   fi
-  if ! ruff format --check backend/ tests/; then
+  if ! "$RUFF" format --check backend/ tests/; then
     echo "  FAIL: ruff found formatting issues. Run 'ruff format backend/ tests/' to fix."
     ERRORS=1
   fi
