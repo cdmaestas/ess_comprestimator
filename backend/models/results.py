@@ -36,8 +36,13 @@ _RE_SKIPPED = re.compile(r"Note:\s+([\d.]+)\s*(\w+)\s+of sampled data.*?could no
 
 
 def _parse_size_mb(value: str, unit: str) -> float:
-    factor = _UNITS_TO_MB.get(unit.lower(), 1.0)
-    return float(value) * factor
+    key = unit.lower()
+    if key not in _UNITS_TO_MB:
+        raise ValueError(
+            f"Unrecognised size unit {unit!r} from binary output — "
+            f"expected one of {list(_UNITS_TO_MB)}"
+        )
+    return float(value) * _UNITS_TO_MB[key]
 
 
 class CompressionResult(BaseModel):
