@@ -66,11 +66,14 @@ def _validate_request(req: JobRequest) -> None:
     # Confine analysis to directories the local user owns or that are explicitly
     # intended for user data. This prevents another local process or a malicious
     # localhost request from probing sensitive system paths like /etc or /root.
-    _allowed = [pathlib.Path.home()]
+    # Roots are resolved (symlinks followed) so the prefix comparison is always
+    # between two canonical paths — on macOS /tmp -> /private/tmp without this
+    # the check silently rejects valid paths inside /tmp.
+    _allowed: list[pathlib.Path] = [pathlib.Path.home().resolve()]
     for _extra in ("/Volumes", "/media", "/mnt", "/tmp", "/private/tmp"):
         _p = pathlib.Path(_extra)
         if _p.exists():
-            _allowed.append(_p)
+            _allowed.append(_p.resolve())
 
     real_str = str(real)
     if not any(real_str == str(root) or real_str.startswith(str(root) + "/")
