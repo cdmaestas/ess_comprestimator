@@ -105,6 +105,7 @@ async def run_job(job_id: str) -> None:
         await registry.update(state)
         await registry.push_status(job_id, JobStatus.RUNNING)
 
+        output_lines: list[str] = []  # populated in the real-binary path
         try:
             if config.MOCK_BINARY:
                 await _mock_run(state)
@@ -131,7 +132,6 @@ async def run_job(job_id: str) -> None:
                 await registry.update(state)
 
                 # ── Stream output line-by-line ─────────────────────────────────
-                output_lines: list[str] = []
                 assert proc.stdout is not None
                 assert proc.stderr is not None
                 
