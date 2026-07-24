@@ -8,6 +8,16 @@
   <!-- Required for the embedded Python runtime -->
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
+  <!-- The PyInstaller onefile backend unpacks its .so files to a temp dir at
+       launch and dlopen()s them. Those extracted files carry no signature, so
+       under the hardened runtime library validation would refuse to load them
+       and the app would die on first launch — only after notarization, since
+       unsigned local builds never enforce this. Both keys are part of
+       electron-builder's own default mac entitlements. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
   <!-- Network access — backend binds a loopback port; frontend talks to it -->
   <key>com.apple.security.network.client</key>
   <true/>

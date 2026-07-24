@@ -79,33 +79,19 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y rpm
 
-      # ── macOS code signing setup ─────────────────────────────────────────────
-      # Requires these repository secrets (Settings → Secrets → Actions):
+      # ── macOS code signing ───────────────────────────────────────────────────
+      # Requires these repository secrets (Settings → Secrets and variables →
+      # Actions):
       #   APPLE_CERTIFICATE       — base64-encoded Developer ID Application .p12
-      #   APPLE_CERTIFICATE_PASSWORD — password for the .p12
+      #   APPLE_CERTIFICATE_PASSWORD — password chosen when exporting the .p12
       #   APPLE_TEAM_ID           — 10-character Apple Team ID
       #   APPLE_ID                — Apple ID email used for notarization
       #   APPLE_APP_SPECIFIC_PASSWORD — app-specific password for that Apple ID
       # Leave secrets unset to produce unsigned builds (e.g. forks, PRs).
-      - name: Import code-signing certificate
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
-          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/cert.p12
-          security import /tmp/cert.p12 -k "$KEYCHAIN_PATH" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
-          security set-key-partition-list -S apple-tool:,apple: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          rm /tmp/cert.p12
-
+      #
+      # No manual `security create-keychain` step is needed: given CSC_LINK
+      # (base64 .p12) and CSC_KEY_PASSWORD, electron-builder creates its own
+      # temporary keychain, imports the certificate, and tears it down after.
       - name: Build
         env:
           # electron-builder reads CSC_* for signing. An empty-but-defined

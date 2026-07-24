@@ -25,7 +25,10 @@ Modified for ESS by _Sarvesh Chezhian_.
 ### macOS
 
 1. Open the `.dmg` file and drag **Comprestimator** into your Applications folder.
-2. Because the app is not yet notarized, macOS Gatekeeper may block it with one of two messages:
+2. Launch it. Signed, notarized builds open normally and need nothing further.
+   Unsigned builds — the default when no Apple signing secrets are configured,
+   see [macOS code signing and notarization](#macos-code-signing-and-notarization)
+   — are blocked by Gatekeeper with one of two messages:
 
    **"Apple cannot verify this app"** — open **System Settings → Privacy & Security**, scroll to the blocked-app entry, and click **Open Anyway**.
 
@@ -173,6 +176,62 @@ You can skip steps that are already up to date:
 ./build.sh --skip-frontend      # reuse existing frontend/dist/
 ./build.sh --skip-pyinstaller   # reuse existing dist/comprestimator-backend
 ```
+
+### macOS code signing and notarization
+
+Builds are unsigned unless signing credentials are present, so the repo builds
+fine without an Apple Developer account. To ship a `.dmg` that opens without a
+Gatekeeper warning, you need a paid Apple Developer Program membership
+($99/year) and the five repository secrets below.
+
+**1. Create a Developer ID Application certificate.** In Xcode, go to
+**Settings → Accounts**, select your team, click **Manage Certificates**, then
+**+ → Developer ID Application**. (Without Xcode, create a Certificate Signing
+Request in Keychain Access and upload it at
+[developer.apple.com/account/resources/certificates](https://developer.apple.com/account/resources/certificates).)
+Note that only an Account Holder can create Developer ID certificates.
+
+**2. Export it as a `.p12`.** In **Keychain Access**, find the
+`Developer ID Application: <your name> (<team id>)` entry, expand it so both the
+certificate and its private key are selected, right-click → **Export 2 items**,
+and save as `.p12` with a password. Keep that password — it becomes
+`APPLE_CERTIFICATE_PASSWORD`.
+
+**3. Base64-encode the `.p12`** so it can be stored as a secret. This prints the
+value to paste into GitHub:
+
+```bash
+base64 -i /path/to/certificate.p12 | pbcopy
+```
+
+**4. Create an app-specific password** for notarization at
+[appleid.apple.com](https://appleid.apple.com) under **Sign-In and Security →
+App-Specific Passwords**. Your regular Apple ID password will not work.
+
+**5. Add the secrets** under **Settings → Secrets and variables → Actions** in
+this repository:
+
+| Secret | Value |
+|--------|-------|
+| `APPLE_CERTIFICATE` | Base64 string from step 3 |
+| `APPLE_CERTIFICATE_PASSWORD` | Password chosen when exporting the `.p12` |
+| `APPLE_TEAM_ID` | 10-character Team ID from [the membership page](https://developer.apple.com/account#MembershipDetailsCard) |
+| `APPLE_ID` | Apple ID email for the developer account |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from step 4 |
+
+Once all five exist, the macOS job signs the app with the hardened runtime and
+submits it to Apple's notary service. Notarization adds roughly 5–15 minutes to
+the build. If any secret is missing, the build still succeeds and produces an
+unsigned `.dmg`.
+
+To verify a finished build:
+
+```bash
+spctl --assess --type execute --verbose /Applications/Comprestimator.app
+```
+
+`accepted` with `source=Notarized Developer ID` means it will open cleanly on
+any Mac.
 
 ---
 
