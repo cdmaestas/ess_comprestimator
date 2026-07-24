@@ -27,7 +27,11 @@ jobs:
         run: go vet ./...
 
       - name: Install Python tools
-        run: pip install --quiet ruff pip-audit -r backend/requirements.txt pytest pytest-asyncio httpx
+        # Dev tooling is pinned (see the file's header for why); runtime deps
+        # stay loose here so pip-audit still sees what a fresh install gets.
+        run: |
+          pip install --quiet -r backend/requirements-dev.lock
+          pip install --quiet -r backend/requirements.txt
 
       - name: Ruff lint
         run: ruff check backend/ tests/

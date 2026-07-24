@@ -324,10 +324,21 @@ Run backend tests:
 python3 -m pytest tests/ -v
 ```
 
+Install the pinned lint and test tooling (the same versions CI uses, so a local
+pass means a CI pass):
+
+```bash
+pip install -r backend/requirements-dev.lock
+```
+
+These are pinned deliberately. Linters change their default rule sets between
+releases, and an unpinned install lets a new release fail a build that touched
+no Python at all. Bump `backend/requirements-dev.lock` when you want the new
+rules, so the findings land in a reviewable diff.
+
 Run dependency vulnerability scan:
 
 ```bash
-pip install pip-audit
 pip-audit -r backend/requirements.txt
 ```
 
