@@ -79,7 +79,7 @@ After install, launch **Comprestimator** from your application menu, or run `com
 
 1. **Enter a path** — type or paste the full path to the directory you want to analyse.
 2. **Choose a sampling mode:**
-   - *Auto (default)* — samples 10% of the data; switches to exhaustive for directories under 1 MB.
+   - *Auto (default)* — samples 10% of the data. For a full scan, choose Exhaustive.
    - *Exhaustive* — reads every file; most accurate but slowest.
    - *Percentage* — enter a custom sample percentage (e.g. `25`).
 3. **Optional filters:**

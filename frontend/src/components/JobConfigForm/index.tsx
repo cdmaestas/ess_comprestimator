@@ -200,7 +200,7 @@ export default function JobConfigForm({ onJobCreated }: Props) {
           >
             <RadioButton
               id="sampling-auto"
-              labelText="Auto (10% of directory, or exhaustive if < 10 GB)"
+              labelText="Auto (10% sample)"
               value="auto"
               disabled={submitting}
             />
