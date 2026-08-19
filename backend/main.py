@@ -39,7 +39,7 @@ app = FastAPI(
         "Accepts job parameters, runs the comprestimator binary asynchronously, "
         "and streams results back to the browser."
     ),
-    version="0.1.0",
+    version="2.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",

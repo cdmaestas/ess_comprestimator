@@ -5,6 +5,9 @@ Estimates the FCM compression ratio that IBM ESS / GPFS would achieve on a given
 Originally authored by _Avishay Traeger_, _Danny Harnik_, _Dmitry Sotnikov_.
 Modified for ESS by _Sarvesh Chezhian_.
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes, including which past
+releases are safe to use.
+
 ---
 
 ## Contents

@@ -1,6 +1,6 @@
 {
   "name": "comprestimator",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "ESS Comprestimator — compression ratio estimator UI",
   "homepage": "https://github.com/cdmaestas/ess_comprestimator",
   "author": {
