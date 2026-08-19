@@ -1,0 +1,106 @@
+.TH ESS_COMPRESTIMATOR 1 "July 2026" "ess_comprestimator 2.0.1" "User Commands"
+.SH NAME
+ess_comprestimator \- estimate FCM4 compression ratios for IBM Storage Scale (ESS/GPFS) data
+.SH SYNOPSIS
+.B ess_comprestimator
+.BI \-\-path " PATH"
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B ess_comprestimator
+analyzes files under
+.I PATH
+and estimates the compression ratio that IBM Storage Scale Systems with
+FCM4 drives would achieve on that data.
+.PP
+It samples files proportionally to their size, compresses 16 KB samples
+with an algorithm similar to the FCM hardware compressor, and reports the
+aggregate pre/post-compression sizes and the estimated ratio.
+Already-compressed or encrypted data (for example
+.BR .zip ", " .jpg ", " .mp4 )
+is detected as incompressible, excluded from the estimate, and reported
+separately.
+.SH OPTIONS
+.TP
+.BI \-p ", " \-\-path " PATH"
+File or directory to analyze. Required.
+.TP
+.B \-\-exhaustive\-sample
+Sample the entire data set. Most accurate, slowest.
+Mutually exclusive with
+.BR \-\-sampling\-percentage .
+.TP
+.BI \-\-sampling\-percentage " N"
+Percentage of the data to sample, as an integer from 1 to 100.
+Default: 10.
+.TP
+.BI \-\-exclude " PATTERN"
+Exclude files or directories whose name matches the glob
+.IR PATTERN .
+May be given multiple times.
+.TP
+.B \-\-exclude\-hidden
+Skip hidden files and directories (names starting with a dot).
+.TP
+.BI \-\-threads " N"
+Number of parallel compression workers. Must be at least 1.
+Default: the number of logical CPUs.
+.TP
+.BI \-l ", " \-\-error\-log " FILE"
+Write the paths of files that could not be read or compressed to
+.IR FILE .
+Default:
+.B comprestimator_errors.log
+in the current directory.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.B \-h ", " \-\-help
+Show usage and exit.
+.SH OUTPUT
+Progress is written to standard output while scanning and sampling.
+On completion the tool prints the estimated compression ratio and the
+pre- and post-compression sample sizes.
+.PP
+If some files could not be read, a
+.B Note:
+line reports how many were excluded from the estimate; the affected paths
+are listed in the error log.
+If part of the sampled data was incompressible, a further
+.B Note:
+line reports how much was excluded.
+.PP
+FCM4 drives are physically limited to 4x compression: if the estimate
+exceeds 4x, provision vdisksets using 4x.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Invalid arguments, unreadable path, or no data could be compressed.
+.SH EXAMPLES
+.PP
+Estimate with the default 10% sample:
+.PP
+.nf
+.RS
+ess_comprestimator \-\-path /data/myvolume
+.RE
+.fi
+.PP
+Exhaustive scan skipping hidden files and logs:
+.PP
+.nf
+.RS
+ess_comprestimator \-\-path /data/myvolume \-\-exhaustive\-sample \\
+    \-\-exclude\-hidden \-\-exclude "*.log"
+.RE
+.fi
+.SH SEE ALSO
+Project home:
+.UR https://github.com/cdmaestas/ess_comprestimator
+.UE
+.SH AUTHORS
+Originally authored by Avishay Traeger, Danny Harnik, and Dmitry Sotnikov.
+Modified for ESS by Sarvesh Chezhian.
