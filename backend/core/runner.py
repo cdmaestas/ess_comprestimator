@@ -57,7 +57,7 @@ def _build_cli_args(state: JobState) -> list[str]:
 async def _mock_run(state: JobState) -> None:
     """Synthetic run — enabled via MOCK_BINARY=true."""
     lines = [
-        "-- IBM ESS Comprestimator v2.0.0 --------",
+        "-- IBM ESS Comprestimator v2.1.0 --------",
         "",
         "[MOCK] Mapping directory | 128.00 MB found so far (0 files were not read)",
         "[MOCK] Running compression on sample…",

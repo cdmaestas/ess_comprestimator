@@ -51,7 +51,40 @@ jobs:
           find . -name "*.sh" -not -path "./.git/*" -not -path "*/node_modules/*" \
             | xargs shellcheck
 
+  # Runs the Go suite on both platform families. macos-latest runners are
+  # arm64 — this is the job that would have caught the compression library
+  # returning "incompressible" for every sample on non-amd64 builds (see
+  # cmd/root_test.go: TestMinlzTryEncodeCompressibleText). ubuntu-latest is
+  # still needed alongside it since it's amd64 and exercises the assembly
+  # encoder path that arm64 doesn't have.
+  go-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l cmd/ main.go)
+          if [ -n "$unformatted" ]; then
+            echo "Files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet + tests
+        run: |
+          go vet ./...
+          go test ./... -v
+
   build:
+    needs: [lint-and-security, go-tests]
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +173,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+    env:
+      # secrets.* isn't readable directly in step-level `if:` conditions —
+      # mirror it into a job-level env var, which is.
+      HAS_GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -152,7 +189,11 @@ jobs:
       - name: Install signing tools
         run: sudo apt-get install -y rpm
 
+      # GPG_PRIVATE_KEY is optional: if it isn't set (e.g. a fork, or before
+      # the secret has been added to this repo), the release still publishes
+      # with unsigned RPMs rather than failing the whole run.
       - name: Import GPG signing key
+        if: ${{ env.HAS_GPG_KEY == 'true' }}
         run: |
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null \
@@ -164,6 +205,7 @@ jobs:
           printf '%%_gpg_name %s\n%%__gpg /usr/bin/gpg\n%%__gpg_sign_cmd %%{__gpg} gpg --batch --no-verbose --no-armor --no-secmem-warning -u "%%{_gpg_name}" -sbo %%{__signature_filename} --digest-algo sha256 %%{__plaintext_filename}\n' "$KEY_ID" > ~/.rpmmacros
 
       - name: Sign RPM packages
+        if: ${{ env.HAS_GPG_KEY == 'true' }}
         run: |
           for rpm in dist-all/*.rpm; do
             rpmsign --addsign "$rpm"
@@ -171,19 +213,33 @@ jobs:
           done
 
       - name: Verify RPM signatures
+        if: ${{ env.HAS_GPG_KEY == 'true' }}
         run: |
           rpm --import packaging/RPM-GPG-KEY-comprestimator
           for rpm in dist-all/*.rpm; do
             rpm --checksig "$rpm" && echo "OK: $rpm"
           done
 
+      - name: Warn if shipping unsigned RPMs
+        if: ${{ env.HAS_GPG_KEY == 'false' }}
+        run: |
+          echo "::warning::GPG_PRIVATE_KEY is not set — RPM packages in this release are unsigned."
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --title "Release ${{ github.ref_name }}" \
-            --generate-notes \
-            dist-all/* \
-            packaging/RPM-GPG-KEY-comprestimator
+          if [ "$HAS_GPG_KEY" = "true" ]; then
+            gh release create "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --title "Release ${{ github.ref_name }}" \
+              --generate-notes \
+              dist-all/* \
+              packaging/RPM-GPG-KEY-comprestimator
+          else
+            gh release create "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --title "Release ${{ github.ref_name }}" \
+              --generate-notes \
+              dist-all/*
+          fi

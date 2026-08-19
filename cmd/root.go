@@ -78,7 +78,7 @@ type compressResult struct {
 	skippedBytes     int64
 }
 
-const VERSION = "2.0.1"
+const VERSION = "2.1.0"
 
 // Compression level used for sampling. LevelBalanced is deliberate:
 // minlz's fast levels (LevelSuperFast, LevelFastest) fall back to a pure-Go
