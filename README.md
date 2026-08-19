@@ -187,6 +187,11 @@ fine without an Apple Developer account. To ship a `.dmg` that opens without a
 Gatekeeper warning, you need a paid Apple Developer Program membership
 ($99/year) and the five repository secrets below.
 
+Run `./scripts/setup-macos-signing.sh` for a guided walkthrough of everything
+below — it opens each page, tells you what to click, and writes the resulting
+GitHub secrets for you. The manual steps are documented here too, in case you
+prefer to do it by hand or need to see exactly what the script does.
+
 **1. Create a Developer ID Application certificate.** In Xcode, go to
 **Settings → Accounts**, select your team, click **Manage Certificates**, then
 **+ → Developer ID Application**. (Without Xcode, create a Certificate Signing
