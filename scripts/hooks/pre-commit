@@ -61,11 +61,11 @@ else
   echo "[pre-commit] shellcheck not found — skipping (brew install shellcheck)"
 fi
 
-# ── Manpage version in sync with cmd/root.go ──────────────────────────────────
-if [[ -x "$ROOT/scripts/stamp-manpage.sh" ]]; then
-  echo "[pre-commit] manpage version check..."
-  if ! "$ROOT/scripts/stamp-manpage.sh" --check; then
-    echo "  FAIL: manpage version is stale. Run scripts/stamp-manpage.sh and re-stage."
+# ── Versions in sync with cmd/root.go ─────────────────────────────────────────
+if [[ -x "$ROOT/scripts/stamp-version.sh" ]]; then
+  echo "[pre-commit] version stamp check..."
+  if ! "$ROOT/scripts/stamp-version.sh" --check; then
+    echo "  FAIL: a version copy is stale. Run scripts/stamp-version.sh and re-stage."
     ERRORS=1
   fi
 fi

@@ -354,10 +354,10 @@ pip-audit -r backend/requirements.txt
 
 Hooks are stored in `scripts/hooks/` and installed automatically by `dev.sh`. They run:
 
-- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed), and a manpage-version check
+- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed), and a version-stamp check
 - **pre-push** — full `pytest` suite
 
-The manpage carries a copy of the binary version in its `.TH` line. `cmd/root.go`'s `VERSION` constant is the single source of truth; `make man` (or `scripts/stamp-manpage.sh`) stamps it into `packaging/ess_comprestimator.1`, and the pre-commit hook and CI fail if the two drift. After bumping `VERSION`, run `make man` and commit the updated manpage.
+`cmd/root.go`'s `VERSION` constant is the single source of truth for the project version. Two other files carry a copy for their own tooling — the manpage `.TH` line (`packaging/ess_comprestimator.1`, shown by `man`) and `electron/package.json` (`"version"`, used by electron-builder). `make stamp-version` (or `scripts/stamp-version.sh`) stamps `VERSION` into both, and the pre-commit hook and CI fail if either drifts. After bumping `VERSION`, run `make stamp-version` and commit the updated files.
 
 To install manually without running `dev.sh`:
 
