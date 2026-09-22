@@ -1,9 +1,17 @@
 BINARY := ess_comprestimator
 
-.PHONY: all clean clean-all
+.PHONY: all man man-check clean clean-all
 
-all:
+all: man
 	go build -o $(BINARY) .
+
+# Stamp cmd/root.go's VERSION into the manpage .TH line (source of truth).
+man:
+	./scripts/stamp-manpage.sh
+
+# Fail if the manpage version has drifted from cmd/root.go (used by CI/hooks).
+man-check:
+	./scripts/stamp-manpage.sh --check
 
 clean:
 	rm -f $(BINARY)

@@ -26,6 +26,9 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
+      - name: Manpage version in sync with cmd/root.go
+        run: ./scripts/stamp-manpage.sh --check
+
       - name: Install Python tools
         # Dev tooling is pinned (see the file's header for why); runtime deps
         # stay loose here so pip-audit still sees what a fresh install gets.
