@@ -354,8 +354,10 @@ pip-audit -r backend/requirements.txt
 
 Hooks are stored in `scripts/hooks/` and installed automatically by `dev.sh`. They run:
 
-- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed)
+- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed), and a manpage-version check
 - **pre-push** — full `pytest` suite
+
+The manpage carries a copy of the binary version in its `.TH` line. `cmd/root.go`'s `VERSION` constant is the single source of truth; `make man` (or `scripts/stamp-manpage.sh`) stamps it into `packaging/ess_comprestimator.1`, and the pre-commit hook and CI fail if the two drift. After bumping `VERSION`, run `make man` and commit the updated manpage.
 
 To install manually without running `dev.sh`:
 
