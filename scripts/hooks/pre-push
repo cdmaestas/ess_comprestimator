@@ -13,10 +13,11 @@ if [[ ! -f "$VENV/bin/activate" ]]; then
   exit 0
 fi
 
-# shellcheck disable=SC1091
-source "$VENV/bin/activate"
-
-if ! python -m pytest tests/ -q --tb=short; then
+# Call the venv's interpreter directly rather than `source activate && python`:
+# activation only prepends $VENV/bin to PATH, which does not reliably resolve a
+# bare `python` across shells and worktrees (a broken lookup fails the hook even
+# when the tests pass). An absolute path is deterministic.
+if ! MOCK_BINARY=true "$VENV/bin/python" -m pytest tests/ -q --tb=short; then
   echo ""
   echo "Pre-push: tests failed. Fix failing tests before pushing."
   exit 1
