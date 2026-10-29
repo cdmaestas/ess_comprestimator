@@ -61,6 +61,15 @@ else
   echo "[pre-commit] shellcheck not found — skipping (brew install shellcheck)"
 fi
 
+# ── Versions in sync with cmd/root.go ─────────────────────────────────────────
+if [[ -x "$ROOT/scripts/stamp-version.sh" ]]; then
+  echo "[pre-commit] version stamp check..."
+  if ! "$ROOT/scripts/stamp-version.sh" --check; then
+    echo "  FAIL: a version copy is stale. Run scripts/stamp-version.sh and re-stage."
+    ERRORS=1
+  fi
+fi
+
 if [[ "$ERRORS" -ne 0 ]]; then
   echo ""
   echo "Pre-commit checks failed. Fix the issues above and retry."

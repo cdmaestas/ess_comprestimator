@@ -1,9 +1,18 @@
 BINARY := ess_comprestimator
 
-.PHONY: all clean clean-all
+.PHONY: all stamp-version version-check clean clean-all
 
-all:
+all: stamp-version
 	go build -o $(BINARY) .
+
+# Stamp cmd/root.go's VERSION (source of truth) into the manpage and
+# electron/package.json.
+stamp-version:
+	./scripts/stamp-version.sh
+
+# Fail if any version copy has drifted from cmd/root.go (used by CI/hooks).
+version-check:
+	./scripts/stamp-version.sh --check
 
 clean:
 	rm -f $(BINARY)

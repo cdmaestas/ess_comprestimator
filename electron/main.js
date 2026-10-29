@@ -182,6 +182,15 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  // Keep the window pinned to the local backend — block navigation to any
+  // other origin (defense-in-depth alongside setWindowOpenHandler above).
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowed = `http://127.0.0.1:${backendPort}`
+    if (!url.startsWith(allowed + '/') && url !== allowed) {
+      event.preventDefault()
+    }
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })

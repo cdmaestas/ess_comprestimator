@@ -5,6 +5,9 @@ Estimates the FCM compression ratio that IBM ESS / GPFS would achieve on a given
 Originally authored by _Avishay Traeger_, _Danny Harnik_, _Dmitry Sotnikov_.
 Modified for ESS by _Sarvesh Chezhian_.
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes, including which past
+releases are safe to use.
+
 ---
 
 ## Contents
@@ -25,7 +28,10 @@ Modified for ESS by _Sarvesh Chezhian_.
 ### macOS
 
 1. Open the `.dmg` file and drag **Comprestimator** into your Applications folder.
-2. Because the app is not yet notarized, macOS Gatekeeper may block it with one of two messages:
+2. Launch it. Signed, notarized builds open normally and need nothing further.
+   Unsigned builds — the default when no Apple signing secrets are configured,
+   see [macOS code signing and notarization](#macos-code-signing-and-notarization)
+   — are blocked by Gatekeeper with one of two messages:
 
    **"Apple cannot verify this app"** — open **System Settings → Privacy & Security**, scroll to the blocked-app entry, and click **Open Anyway**.
 
@@ -76,7 +82,7 @@ After install, launch **Comprestimator** from your application menu, or run `com
 
 1. **Enter a path** — type or paste the full path to the directory you want to analyse.
 2. **Choose a sampling mode:**
-   - *Auto (default)* — samples 10% of the data; switches to exhaustive for directories under 1 MB.
+   - *Auto (default)* — samples 10% of the data. For a full scan, choose Exhaustive.
    - *Exhaustive* — reads every file; most accurate but slowest.
    - *Percentage* — enter a custom sample percentage (e.g. `25`).
 3. **Optional filters:**
@@ -174,6 +180,67 @@ You can skip steps that are already up to date:
 ./build.sh --skip-pyinstaller   # reuse existing dist/comprestimator-backend
 ```
 
+### macOS code signing and notarization
+
+Builds are unsigned unless signing credentials are present, so the repo builds
+fine without an Apple Developer account. To ship a `.dmg` that opens without a
+Gatekeeper warning, you need a paid Apple Developer Program membership
+($99/year) and the five repository secrets below.
+
+Run `./scripts/setup-macos-signing.sh` for a guided walkthrough of everything
+below — it opens each page, tells you what to click, and writes the resulting
+GitHub secrets for you. The manual steps are documented here too, in case you
+prefer to do it by hand or need to see exactly what the script does.
+
+**1. Create a Developer ID Application certificate.** In Xcode, go to
+**Settings → Accounts**, select your team, click **Manage Certificates**, then
+**+ → Developer ID Application**. (Without Xcode, create a Certificate Signing
+Request in Keychain Access and upload it at
+[developer.apple.com/account/resources/certificates](https://developer.apple.com/account/resources/certificates).)
+Note that only an Account Holder can create Developer ID certificates.
+
+**2. Export it as a `.p12`.** In **Keychain Access**, find the
+`Developer ID Application: <your name> (<team id>)` entry, expand it so both the
+certificate and its private key are selected, right-click → **Export 2 items**,
+and save as `.p12` with a password. Keep that password — it becomes
+`APPLE_CERTIFICATE_PASSWORD`.
+
+**3. Base64-encode the `.p12`** so it can be stored as a secret. This prints the
+value to paste into GitHub:
+
+```bash
+base64 -i /path/to/certificate.p12 | pbcopy
+```
+
+**4. Create an app-specific password** for notarization at
+[appleid.apple.com](https://appleid.apple.com) under **Sign-In and Security →
+App-Specific Passwords**. Your regular Apple ID password will not work.
+
+**5. Add the secrets** under **Settings → Secrets and variables → Actions** in
+this repository:
+
+| Secret | Value |
+|--------|-------|
+| `APPLE_CERTIFICATE` | Base64 string from step 3 |
+| `APPLE_CERTIFICATE_PASSWORD` | Password chosen when exporting the `.p12` |
+| `APPLE_TEAM_ID` | 10-character Team ID from [the membership page](https://developer.apple.com/account#MembershipDetailsCard) |
+| `APPLE_ID` | Apple ID email for the developer account |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from step 4 |
+
+Once all five exist, the macOS job signs the app with the hardened runtime and
+submits it to Apple's notary service. Notarization adds roughly 5–15 minutes to
+the build. If any secret is missing, the build still succeeds and produces an
+unsigned `.dmg`.
+
+To verify a finished build:
+
+```bash
+spctl --assess --type execute --verbose /Applications/Comprestimator.app
+```
+
+`accepted` with `source=Notarized Developer ID` means it will open cleanly on
+any Mac.
+
 ---
 
 ## Command-line interface
@@ -265,10 +332,21 @@ Run backend tests:
 python3 -m pytest tests/ -v
 ```
 
+Install the pinned lint and test tooling (the same versions CI uses, so a local
+pass means a CI pass):
+
+```bash
+pip install -r backend/requirements-dev.lock
+```
+
+These are pinned deliberately. Linters change their default rule sets between
+releases, and an unpinned install lets a new release fail a build that touched
+no Python at all. Bump `backend/requirements-dev.lock` when you want the new
+rules, so the findings land in a reviewable diff.
+
 Run dependency vulnerability scan:
 
 ```bash
-pip install pip-audit
 pip-audit -r backend/requirements.txt
 ```
 
@@ -276,8 +354,10 @@ pip-audit -r backend/requirements.txt
 
 Hooks are stored in `scripts/hooks/` and installed automatically by `dev.sh`. They run:
 
-- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed)
+- **pre-commit** — `go vet`, `ruff` lint/format check (if installed), `shellcheck` (if installed), and a version-stamp check
 - **pre-push** — full `pytest` suite
+
+`cmd/root.go`'s `VERSION` constant is the single source of truth for the project version. Two other files carry a copy for their own tooling — the manpage `.TH` line (`packaging/ess_comprestimator.1`, shown by `man`) and `electron/package.json` (`"version"`, used by electron-builder). `make stamp-version` (or `scripts/stamp-version.sh`) stamps `VERSION` into both, and the pre-commit hook and CI fail if either drifts. After bumping `VERSION`, run `make stamp-version` and commit the updated files.
 
 To install manually without running `dev.sh`:
 

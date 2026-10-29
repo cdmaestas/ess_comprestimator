@@ -1,0 +1,19 @@
+# Pinned development and CI tooling.
+#
+# These are NOT runtime dependencies — see requirements.txt (loose) and
+# requirements.lock (pinned) for those.
+#
+# Why pinned: linters change their default rule sets between releases. An
+# unpinned `pip install ruff` in CI means a new ruff release can fail a build
+# that touched no Python at all, on code that was already merged. Bump these
+# deliberately, so the new findings show up in a reviewable diff instead of on
+# an unrelated pull request.
+#
+# Used by: .github/workflows/build.yml (lint-and-security job)
+# Install:  pip install -r backend/requirements-dev.lock
+
+ruff==0.15.22
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1
+pip-audit==2.10.1
