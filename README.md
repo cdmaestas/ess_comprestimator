@@ -19,6 +19,7 @@ releases are safe to use.
 - [Building from source](#building-from-source)
 - [Command-line interface](#command-line-interface)
 - [Development](#development)
+- [MCP server](#mcp-server)
 - [Clean build](#clean-build)
 
 ---
@@ -374,6 +375,105 @@ chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 | `MOCK_BINARY` | `false` | Return synthetic results without invoking the binary |
 | `MAX_CONCURRENT_JOBS` | `3` | Maximum parallel analysis jobs (must be an integer ≥ 1) |
 | `DEV_CORS` | *(unset)* | Set to `true` to allow the Vite dev server origin — **never set in production** |
+
+---
+
+## MCP server
+
+The repo ships an [MCP](https://modelcontextprotocol.io) server that lets an AI
+agent (Bob, Claude, Codex, or any MCP-compatible client) submit compression
+analysis jobs and reason about the results conversationally.
+
+### Prerequisites
+
+The MCP server is a Python module inside the existing `backend/` package. It
+requires Python 3.10+ (the `.venv` created by `dev.sh` uses Python 3.11) and
+the `mcp` package, which is already listed in `backend/requirements.txt`.
+
+If you have not run `dev.sh` yet, create the venv first:
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install -r backend/requirements.txt
+```
+
+### Starting the server
+
+The server speaks the MCP stdio transport — it is launched by the MCP host as a
+subprocess. For development without the compiled Go binary, set `MOCK_BINARY=true`:
+
+```bash
+MOCK_BINARY=true .venv/bin/python -m backend.mcp_server
+```
+
+For production use (after running `make`):
+
+```bash
+.venv/bin/python -m backend.mcp_server
+```
+
+The server exits immediately with an error if the Go binary is missing and
+`MOCK_BINARY` is not set.
+
+### Connecting to Bob
+
+The server is pre-registered in `.bob/mcp.json`. Bob picks it up automatically;
+no manual steps are needed. It is configured with `MOCK_BINARY=true` by default
+so it works without building the binary first.
+
+To switch to real analysis, remove the `MOCK_BINARY` env override from
+`.bob/mcp.json`:
+
+```json
+"comprestimator": {
+  "command": ".venv/bin/python",
+  "args": ["-m", "backend.mcp_server"],
+  "cwd": "/path/to/ess_comprestimator"
+}
+```
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `analyse_path` | Submit a compression analysis job and wait for the result. Returns a markdown report with ratio, size reduction, and FCM4 provisioning guidance. |
+| `list_jobs` | List recent analysis jobs (newest first) with their status and compression ratio. |
+
+#### `analyse_path` parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | string | **required** | Absolute path to the file or directory to analyse |
+| `exhaustive_sampling` | boolean | `false` | Scan every file — most accurate, slowest |
+| `sampling_percentage` | number | `null` (10%) | Custom sample percentage (0.1–100) |
+| `exclude` | string[] | `[]` | Glob patterns or filenames to skip |
+| `skip_hidden` | boolean | `false` | Skip files and directories starting with `.` |
+
+### Resources
+
+Completed job results are exposed as MCP resources at:
+
+```
+comprestimator://jobs/{job_id}
+```
+
+The resource returns the full result as JSON, including ratio, size before/after,
+skipped-bytes volume, and FCM4 provisioning notes.
+
+### Prompt
+
+The server exposes a `compression_advisor` prompt that injects FCM4/ESS domain
+knowledge into the agent — FCM4's 4x physical cap, the provisioning formula,
+how to interpret skipped (incompressible) data, and when to prefer exhaustive
+sampling. Use it to ensure consistent, accurate interpretations.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `MOCK_BINARY` | `false` | Return synthetic results without invoking the Go binary |
+| `MCP_ANALYSE_TIMEOUT` | `300` | Seconds to wait for a job before returning "still running" |
+| `COMPRESTIMATOR_PATH` | `./ess_comprestimator` | Path to the compiled Go binary |
 
 ---
 
