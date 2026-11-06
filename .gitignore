@@ -35,3 +35,7 @@ results.csv
 
 # Legacy (kept for reference)
 releases/
+
+# Local Bob config (absolute paths, local tokens) and auto-generated PyInstaller spec
+.bob/
+comprestimator-backend.spec
